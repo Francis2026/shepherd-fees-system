@@ -973,7 +973,7 @@ def login_page():
         with st.spinner("Loading Shepherd Academy School Fees Management System..."):
             time.sleep(0.5)
         st.session_state.login_loaded = True
-    create_default_users()
+    # create_default_users()
 
     col1, col2, col3 = st.columns([1, 1.3, 1])
 
