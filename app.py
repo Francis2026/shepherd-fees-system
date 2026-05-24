@@ -355,6 +355,8 @@ def init_firebase():
                 st.stop()
     return firestore.client()
 
+db = init_firebase()
+
 
 # ------------------- Logo Functions -------------------
 def get_logo_base64():
