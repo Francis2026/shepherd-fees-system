@@ -1373,7 +1373,7 @@ def main_app():
 
                     if all_transactions:
                         df = pd.DataFrame(all_transactions)
-                        st.dataframe(df, width='stretch')
+                        st.dataframe(df, use_container_width=True)
 
                         # Summary metrics
                         col1, col2, col3, col4, col5 = st.columns(5)
@@ -1766,7 +1766,7 @@ def main_app():
                 title = f"{selected_class} - Archived Pupils (Left School)"
 
             if not df_to_show.empty:
-                st.dataframe(df_to_show, width='stretch')
+                st.dataframe(df_to_show, use_container_width=True)
 
                 if report_type != "Archived Only" and not df_full.empty:
                     fig = px.bar(df_full[df_full["Status"] != "Archived (Left School)"], x="Name",
@@ -1893,9 +1893,9 @@ def main_app():
             if not df_school.empty:
                 display_columns = [col for col in columns_to_export if col in df_school.columns]
                 if display_columns:
-                    st.dataframe(df_school[display_columns], width='stretch')
+                    st.dataframe(df_school[display_columns], use_container_width=True)
                 else:
-                    st.dataframe(df_school, width='stretch')
+                    st.dataframe(df_school, use_container_width=True)
 
                 total_expected = df_school[df_school["Status"] != "Archived (Left School)"][
                     "Total Due (UGX)"].sum() if not df_school.empty else 0
