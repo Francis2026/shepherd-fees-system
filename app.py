@@ -1493,7 +1493,7 @@ def main_app():
                                                      key=f"print_{btn['id']}"):
                                             pdf_buffer = generate_pdf_receipt(
                                                 school_name="Shepherd Academy Busiu",
-                                                logo_path="images.jfif" if os.path.exists("images.jfif") else "",
+                                                logo_path="logo.png" if os.path.exists("logo.png") else "",
                                                 receipt_num=btn['receipt_no'],
                                                 date_str=btn['date'].strftime("%Y-%m-%d %H:%M:%S"),
                                                 child_name=pupil['name'],
