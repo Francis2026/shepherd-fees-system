@@ -338,26 +338,11 @@ st.markdown("""
     [data-testid="stToolbar"] {display: none;}
     a[href*="github"] {display: none !important;}
     
-    /* REMOVE BOTTOM HOSTED BY STREAMLIT AND PROFILE ICON */
-    .stApp footer {
+    /* Remove bottom Streamlit branding - Safe version */
+    footer {
         display: none !important;
     }
     .stAppViewerBadge {
-        display: none !important;
-    }
-    [data-testid="stStatusWidget"] {
-        display: none !important;
-    }
-    .css-1lsmg2y {
-        display: none !important;
-    }
-    .st-emotion-cache-1lsmg2y {
-        display: none !important;
-    }
-    .viewerBadge_link__qS5y8 {
-        display: none !important;
-    }
-    .stApp > div:last-child {
         display: none !important;
     }
     
