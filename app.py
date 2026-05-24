@@ -329,6 +329,14 @@ st.markdown("""
     .main .block-container {
         padding-top: 0rem !important;
     }
+    
+    /* REMOVE STREAMLIT BRANDING - ADD THESE 6 LINES */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    .stAppDeployButton {display: none;}
+    .stStatusWidget {display: none;}
+    [data-testid="stToolbar"] {display: none;}
+    a[href*="github"] {display: none !important;}
 </style>
 """, unsafe_allow_html=True)
 
