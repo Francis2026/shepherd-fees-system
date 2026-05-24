@@ -15,6 +15,11 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 import os
 import base64
 import time
+import streamlit as st
+
+# ========== FIX: Prevent multiple initializations ==========
+if "firebase_done" not in st.session_state:
+    st.session_state.firebase_done = False
 
 # ------------------- Page Configuration -------------------
 st.set_page_config(
@@ -330,26 +335,25 @@ st.markdown("""
 
 # ------------------- Firebase Initialization -------------------
 def init_firebase():
+    # Only initialize once
+    if st.session_state.firebase_done:
+        return firestore.client()
+
     if not firebase_admin._apps:
         try:
             firebase_creds = dict(st.secrets["firebase"])
             cred = credentials.Certificate(firebase_creds)
             firebase_admin.initialize_app(cred)
-        except Exception as e:
-            try:
-                if os.path.exists("firebase-key.json"):
-                    cred = credentials.Certificate("firebase-key.json")
-                    firebase_admin.initialize_app(cred)
-                else:
-                    st.error("Firebase credentials not found. Please set up firebase-key.json")
-                    st.stop()
-            except Exception as e2:
-                st.error(f"Firebase connection failed: {str(e2)}")
+            st.session_state.firebase_done = True
+        except:
+            if os.path.exists("firebase-key.json"):
+                cred = credentials.Certificate("firebase-key.json")
+                firebase_admin.initialize_app(cred)
+                st.session_state.firebase_done = True
+            else:
+                st.error("Firebase credentials not found.")
                 st.stop()
     return firestore.client()
-
-
-db = init_firebase()
 
 
 # ------------------- Logo Functions -------------------
@@ -964,6 +968,11 @@ class FeesManager:
 
 # ------------------- Modern Login UI -------------------
 def login_page():
+    # Show loading only once
+    if "login_loaded" not in st.session_state:
+        with st.spinner("Loading Shepherd Academy School Fees Management System..."):
+            time.sleep(0.5)
+        st.session_state.login_loaded = True
     create_default_users()
 
     col1, col2, col3 = st.columns([1, 1.3, 1])
