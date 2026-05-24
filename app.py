@@ -15,11 +15,17 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 import os
 import base64
 import time
-import streamlit as st
 
-# ========== FIX: Prevent multiple initializations ==========
-if "firebase_done" not in st.session_state:
+# ========== CRITICAL: Initialize session state ONCE ==========
+if "app_initialized" not in st.session_state:
+    st.session_state.app_initialized = True
+    st.session_state.logged_in = False
     st.session_state.firebase_done = False
+    st.session_state.login_loaded = False
+    st.session_state.navigation_menu = "Dashboard"
+    st.session_state.show_archived = False
+    st.session_state.username = ""
+    st.session_state.role = ""
 
 # ------------------- Page Configuration -------------------
 st.set_page_config(
@@ -329,24 +335,15 @@ st.markdown("""
     .main .block-container {
         padding-top: 0rem !important;
     }
-    
-    /* REMOVE STREAMLIT BRANDING - ADD THESE 6 LINES */
+
+    /* REMOVE STREAMLIT BRANDING */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .stAppDeployButton {display: none;}
     .stStatusWidget {display: none;}
     [data-testid="stToolbar"] {display: none;}
     a[href*="github"] {display: none !important;}
-    
-    /* Remove bottom Streamlit branding - Safe version */
-    footer {
-        display: none !important;
-    }
-    .stAppViewerBadge {
-        display: none !important;
-    }
-    
-    
+    .stAppViewerBadge {display: none !important;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -354,7 +351,7 @@ st.markdown("""
 # ------------------- Firebase Initialization -------------------
 def init_firebase():
     # Only initialize once
-    if st.session_state.firebase_done:
+    if st.session_state.get("firebase_done", False):
         return firestore.client()
 
     if not firebase_admin._apps:
@@ -373,6 +370,8 @@ def init_firebase():
                 st.stop()
     return firestore.client()
 
+
+# Initialize database
 db = init_firebase()
 
 
@@ -988,12 +987,11 @@ class FeesManager:
 
 # ------------------- Modern Login UI -------------------
 def login_page():
-    # Show loading only once
-    if "login_loaded" not in st.session_state:
+    # Only show loading ONCE
+    if not st.session_state.get("login_loaded", False):
         with st.spinner("Loading Shepherd Academy School Fees Management System..."):
             time.sleep(0.5)
         st.session_state.login_loaded = True
-    # create_default_users()
 
     col1, col2, col3 = st.columns([1, 1.3, 1])
 
@@ -1023,7 +1021,8 @@ def login_page():
             </div>
             """, unsafe_allow_html=True)
 
-        with st.form("login_form"):
+        # Create form WITHOUT st.rerun() inside
+        with st.form(key="login_form"):
             username = st.text_input("Username", placeholder="Enter your username")
             password = st.text_input("Password", type="password", placeholder="Enter your password")
             submitted = st.form_submit_button("Sign In", use_container_width=True)
@@ -1034,9 +1033,9 @@ def login_page():
                 else:
                     role = authenticate_user(username, password)
                     if role:
-                        st.session_state["logged_in"] = True
-                        st.session_state["username"] = username
-                        st.session_state["role"] = role
+                        st.session_state.logged_in = True
+                        st.session_state.username = username
+                        st.session_state.role = role
                         st.rerun()
                     else:
                         st.error("Invalid username or password")
@@ -1046,13 +1045,6 @@ def login_page():
 def main_app():
     # Display the header with logo on the right at the top of the main interface
     display_main_header()
-
-    if "navigation_menu" not in st.session_state:
-        st.session_state.navigation_menu = "Dashboard"
-
-    # Track if we should show archived pupils
-    if "show_archived" not in st.session_state:
-        st.session_state.show_archived = False
 
     with st.sidebar:
         role = st.session_state["role"]
@@ -2234,10 +2226,7 @@ def main_app():
 
 
 def main():
-    if "logged_in" not in st.session_state:
-        st.session_state["logged_in"] = False
-
-    if not st.session_state["logged_in"]:
+    if not st.session_state.get("logged_in", False):
         login_page()
     else:
         main_app()
