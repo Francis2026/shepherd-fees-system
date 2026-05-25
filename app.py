@@ -1,7 +1,4 @@
-# ==================== MAIN APP ====================
 import streamlit as st
-import firebase_admin
-from firebase_admin import credentials, firestore
 import pandas as pd
 import datetime
 import uuid
@@ -19,24 +16,27 @@ import time
 from datetime import timedelta
 import json
 
-# ========== CRITICAL: Initialize session state ONCE ==========
-if "app_initialized" not in st.session_state:
-    st.session_state.app_initialized = True
-    st.session_state.logged_in = False
-    st.session_state.firebase_done = False
-    st.session_state.login_loaded = False
-    st.session_state.navigation_menu = "Dashboard"
-    st.session_state.show_archived = False
-    st.session_state.username = ""
-    st.session_state.role = ""
+# Import Supabase
+from supabase import create_client
 
-# ------------------- Page Configuration -------------------
+# ========== PAGE CONFIGURATION (MUST BE FIRST) ==========
 st.set_page_config(
     page_title="Shepherd Academy | Fees Management",
     layout="wide",
     page_icon=":school:",
     initial_sidebar_state="expanded"
 )
+
+# ========== CRITICAL: Initialize session state ONCE ==========
+if "app_initialized" not in st.session_state:
+    st.session_state.app_initialized = True
+    st.session_state.logged_in = False
+    st.session_state.login_loaded = False
+    st.session_state.navigation_menu = "Dashboard"
+    st.session_state.show_archived = False
+    st.session_state.username = ""
+    st.session_state.role = ""
+    st.session_state.show_enrollment_dialog = False
 
 # ------------------- Modern Color Scheme -------------------
 COLORS = {
@@ -323,43 +323,49 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# ==================== SUPABASE INITIALIZATION ====================
+@st.cache_resource
+def init_supabase():
+    try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_KEY"]
+        return create_client(url, key)
+    except Exception as e:
+        st.error(f"Supabase connection error: {str(e)}")
+        return None
+
+
+supabase = init_supabase()
+
+
 # ==================== ENHANCED CACHE SYSTEM ====================
 class SmartCache:
-    """Enhanced cache with different TTLs for different data types"""
-
     def __init__(self):
         self.cache = {}
         self.ttl_config = {
-            "pupils": 1200,  # 20 minutes - pupil data rarely changes
-            "ledger": 300,  # 5 minutes - payments can happen frequently
-            "stats": 600,  # 10 minutes - dashboard stats
-            "summary": 900,  # 15 minutes - reports
-            "balance": 60,  # 1 minute - critical for payment accuracy
-            "classes": 3600,  # 60 minutes - class lists
+            "pupils": 1200,
+            "ledger": 300,
+            "stats": 600,
+            "summary": 900,
         }
 
     def get(self, key, data_type="pupils"):
-        """Get cached data if not expired"""
         if key in self.cache:
             data, timestamp = self.cache[key]
             ttl = self.ttl_config.get(data_type, 300)
             if datetime.datetime.now() - timestamp < timedelta(seconds=ttl):
                 return data
             else:
-                # Expired, remove it
                 del self.cache[key]
         return None
 
     def set(self, key, data, data_type="pupils"):
-        """Store data in cache"""
         self.cache[key] = (data, datetime.datetime.now())
 
     def invalidate(self, key=None, data_type=None):
-        """Clear cache for a specific key, data type, or all"""
         if key:
             self.cache.pop(key, None)
         elif data_type:
-            # Invalidate all keys of a certain type (by prefix)
             keys_to_remove = [k for k in self.cache if k.startswith(data_type)]
             for k in keys_to_remove:
                 self.cache.pop(k, None)
@@ -367,37 +373,10 @@ class SmartCache:
             self.cache.clear()
 
     def clear_all(self):
-        """Clear entire cache"""
         self.cache.clear()
 
 
-# Initialize cache
 cache = SmartCache()
-
-
-# ==================== FIREBASE INITIALIZATION ====================
-def init_firebase():
-    if st.session_state.get("firebase_done", False):
-        return firestore.client()
-
-    if not firebase_admin._apps:
-        try:
-            firebase_creds = dict(st.secrets["firebase"])
-            cred = credentials.Certificate(firebase_creds)
-            firebase_admin.initialize_app(cred)
-            st.session_state.firebase_done = True
-        except:
-            if os.path.exists("firebase-key.json"):
-                cred = credentials.Certificate("firebase-key.json")
-                firebase_admin.initialize_app(cred)
-                st.session_state.firebase_done = True
-            else:
-                st.error("Firebase credentials not found.")
-                st.stop()
-    return firestore.client()
-
-
-db = init_firebase()
 
 
 # ==================== HELPER FUNCTIONS ====================
@@ -553,19 +532,6 @@ def export_summary_to_pdf(df, title, filename):
     return buffer
 
 
-def firestore_to_serializable(docs):
-    """Convert Firestore documents to serializable dicts"""
-    result = []
-    for doc in docs:
-        data = doc.to_dict()
-        data['id'] = doc.id
-        for key, value in data.items():
-            if isinstance(value, datetime.datetime):
-                data[key] = value.isoformat()
-        result.append(data)
-    return result
-
-
 # ==================== CLASS PROGRESSION ====================
 CLASS_PROGRESSION = {
     "Baby Class": "Middle Class",
@@ -577,13 +543,13 @@ CLASS_PROGRESSION = {
     "P4": "P5",
     "P5": "P6",
     "P6": "P7",
-    "P7": None  # Completed primary
+    "P7": None
 }
 
 TERM_ORDER = ["Term 1", "Term 2", "Term 3"]
 
 
-# ==================== FEES MANAGER ====================
+# ==================== SUPABASE FEES MANAGER ====================
 class FeesManager:
     def __init__(self):
         self.classes = list(CLASS_PROGRESSION.keys())
@@ -592,74 +558,84 @@ class FeesManager:
         self.pupil_types = ["Community Child", "Staff Child", "Shepherd Child"]
 
     def get_next_class(self, current_class):
-        """Get the next class for promotion"""
         return CLASS_PROGRESSION.get(current_class, current_class)
 
     def get_all_pupils(self, include_archived=False):
-        """Get all pupils with caching"""
         cache_key = f"pupils_all_{include_archived}"
         cached = cache.get(cache_key, "pupils")
         if cached is not None:
             return cached
 
+        if supabase is None:
+            return []
+
         try:
-            if include_archived:
-                docs = list(db.collection("pupils").stream())
-            else:
-                docs = list(db.collection("pupils").where("active", "==", True).stream())
-            result = firestore_to_serializable(docs)
-            cache.set(cache_key, result, "pupils")
-            return result
+            query = supabase.table("pupils").select("*")
+            if not include_archived:
+                query = query.eq("active", True)
+            result = query.execute()
+            pupils = result.data
+            cache.set(cache_key, pupils, "pupils")
+            return pupils
         except Exception as e:
             st.error(f"Error fetching pupils: {str(e)}")
             return []
 
     def get_archived_pupils(self):
-        """Get archived pupils with caching"""
         cache_key = "pupils_archived"
         cached = cache.get(cache_key, "pupils")
         if cached is not None:
             return cached
 
+        if supabase is None:
+            return []
+
         try:
-            docs = list(db.collection("pupils").where("archived", "==", True).stream())
-            result = firestore_to_serializable(docs)
-            cache.set(cache_key, result, "pupils")
-            return result
-        except Exception as e:
+            result = supabase.table("pupils").select("*").eq("archived", True).execute()
+            pupils = result.data
+            cache.set(cache_key, pupils, "pupils")
+            return pupils
+        except:
             return []
 
     def get_pupils_by_class(self, class_name, include_archived=False):
-        """Get pupils by class"""
         all_pupils = self.get_all_pupils(include_archived)
         return [p for p in all_pupils if p.get("class") == class_name]
 
     def get_pupils_for_term(self, class_name, term, year, include_archived=False):
-        """Only show pupils who are ENROLLED in this specific term"""
-        all_pupils = self.get_pupils_by_class(class_name, include_archived)
-        term_key = f"{year}_{term}"
+        if supabase is None:
+            return []
 
-        filtered = []
-        for pupil in all_pupils:
-            if pupil.get("archived", False) and not include_archived:
-                continue
+        try:
+            result = supabase.table("term_enrollments") \
+                .select("pupil_id, pupils(*)") \
+                .eq("term", term) \
+                .eq("year", year) \
+                .eq("is_active", True) \
+                .execute()
 
-            # Check if pupil is enrolled in this term
-            enrollments = pupil.get("term_enrollments", {})
-            is_enrolled = enrollments.get(term_key, {}).get("active", False)
+            pupils = []
+            for item in result.data:
+                pupil = item.get("pupils", {})
+                if pupil:
+                    if pupil.get("class") == class_name or class_name == "All Classes":
+                        if not include_archived and pupil.get("archived", False):
+                            continue
+                        pupils.append(pupil)
 
-            # Also check if this is the enrollment term (for newly enrolled pupils)
-            is_initial_enrollment = (pupil.get("enrollment_term") == term and
-                                     pupil.get("enrollment_year") == year)
+            all_pupils = self.get_all_pupils(include_archived)
+            for pupil in all_pupils:
+                if pupil.get("enrollment_term") == term and pupil.get("enrollment_year") == year:
+                    if pupil.get("class") == class_name or class_name == "All Classes":
+                        if pupil not in pupils:
+                            pupils.append(pupil)
 
-            if is_enrolled or is_initial_enrollment:
-                if pupil.get("class") == class_name or class_name == "All Classes":
-                    filtered.append(pupil)
-
-        return filtered
+            return pupils
+        except Exception as e:
+            st.error(f"Error getting pupils for term: {str(e)}")
+            return []
 
     def get_previous_term_balance(self, pupil_id, current_term, current_year):
-        """Get balance/credit from previous term (excess carries forward)"""
         term_order = self.term_order
         current_order = term_order.get(current_term, 1)
 
@@ -673,48 +649,57 @@ class FeesManager:
             prev_term = "Term 2"
             prev_year = current_year
 
-        ledger_entries = self.get_ledger(pupil_id, prev_term, prev_year)
-        if ledger_entries:
-            last_entry = ledger_entries[-1]
-            balance = last_entry.get("balance", 0)
-            excess = last_entry.get("excess_amount", 0)
+        if supabase is None:
+            return 0
 
-            # If balance is 0 but there's excess, return negative excess (credit)
-            if balance == 0 and excess > 0:
-                return -excess
-            return balance
-        return 0
+        try:
+            result = supabase.table("payments").select("balance, excess_amount") \
+                .eq("pupil_id", pupil_id) \
+                .eq("term", prev_term) \
+                .eq("year", prev_year) \
+                .order("payment_date", desc=True) \
+                .limit(1) \
+                .execute()
+
+            if result.data:
+                last_entry = result.data[0]
+                balance = last_entry.get("balance", 0)
+                excess = last_entry.get("excess_amount", 0)
+                if balance == 0 and excess > 0:
+                    return -excess
+                return balance
+            return 0
+        except:
+            return 0
 
     def get_ledger(self, pupil_id, term, year):
-        """Get ledger entries with caching"""
         cache_key = f"ledger_{pupil_id}_{term}_{year}"
         cached = cache.get(cache_key, "ledger")
         if cached is not None:
             return cached
 
-        try:
-            ledger_ref = db.collection("ledgers").document(pupil_id).collection(term)
-            all_docs = list(ledger_ref.stream())
-            filtered_docs = []
-            for doc in all_docs:
-                data = doc.to_dict()
-                doc_year = data.get("year")
-                if doc_year is not None and int(doc_year) == int(year):
-                    filtered_docs.append(doc)
-            filtered_docs.sort(key=lambda x: x.to_dict().get("date", datetime.datetime.min))
+        if supabase is None:
+            return []
 
-            result = firestore_to_serializable(filtered_docs)
-            cache.set(cache_key, result, "ledger")
-            return result
-        except Exception as e:
-            st.error(f"Error fetching ledger: {str(e)}")
+        try:
+            result = supabase.table("payments").select("*") \
+                .eq("pupil_id", pupil_id) \
+                .eq("term", term) \
+                .eq("year", int(year)) \
+                .order("payment_date") \
+                .execute()
+            payments = result.data
+            cache.set(cache_key, payments, "ledger")
+            return payments
+        except:
             return []
 
     def enroll_pupil(self, name, class_name, term_fees, pupil_type, current_term, current_year):
-        """Enroll a new pupil with current term/year"""
-        try:
-            pupil_ref = db.collection("pupils").document()
+        if supabase is None:
+            st.error("Database not connected")
+            return None
 
+        try:
             if pupil_type == "Shepherd Child":
                 is_sponsored = True
                 sponsor_reason = "Shepherd Child"
@@ -726,66 +711,63 @@ class FeesManager:
                 is_sponsored = False
                 sponsor_reason = ""
 
-            term_key = f"{current_year}_{current_term}"
-            term_enrollments = {
-                term_key: {
-                    "active": True,
-                    "class": class_name,
-                    "enrolled_at": datetime.datetime.now().isoformat(),
-                    "term_fees": term_fees,
-                    "pupil_type": pupil_type
-                }
-            }
+            pupil_id = str(uuid.uuid4())
 
-            pupil_ref.set({
+            pupil_data = {
+                "id": pupil_id,
                 "name": name,
                 "class": class_name,
-                "enrollment_date": datetime.datetime.now().isoformat(),
                 "term_fees": term_fees,
                 "pupil_type": pupil_type,
                 "is_sponsored": is_sponsored,
                 "sponsor_reason": sponsor_reason,
                 "active": True,
                 "archived": False,
-                "leaving_date": None,
-                "leaving_reason": None,
                 "enrollment_term": current_term,
                 "enrollment_year": current_year,
                 "current_term": current_term,
-                "current_year": current_year,
-                "active_since_term": current_term,
-                "active_since_year": current_year,
-                "term_enrollments": term_enrollments
-            })
+                "current_year": current_year
+            }
 
-            # Invalidate caches
+            supabase.table("pupils").insert(pupil_data).execute()
+
+            supabase.table("term_enrollments").insert({
+                "pupil_id": pupil_id,
+                "term": current_term,
+                "year": current_year,
+                "is_active": True
+            }).execute()
+
             cache.invalidate(data_type="pupils")
             cache.invalidate(data_type="stats")
-            return pupil_ref.id
+            return pupil_id
         except Exception as e:
             st.error(f"Error enrolling pupil: {str(e)}")
             return None
 
     def get_pupil_details(self, pupil_id):
-        """Get pupil details"""
         cache_key = f"pupil_{pupil_id}"
         cached = cache.get(cache_key, "pupils")
         if cached is not None:
             return cached
 
-        try:
-            doc = db.collection("pupils").document(pupil_id).get()
-            if doc.exists:
-                data = doc.to_dict()
-                data['id'] = doc.id
-                cache.set(cache_key, data, "pupils")
-                return data
+        if supabase is None:
             return None
-        except Exception as e:
+
+        try:
+            result = supabase.table("pupils").select("*").eq("id", pupil_id).execute()
+            if result.data:
+                pupil = result.data[0]
+                cache.set(cache_key, pupil, "pupils")
+                return pupil
+            return None
+        except:
             return None
 
     def update_pupil(self, pupil_id, name, class_name, term_fees, pupil_type):
-        """Update pupil details"""
+        if supabase is None:
+            return False
+
         try:
             if pupil_type == "Shepherd Child":
                 is_sponsored = True
@@ -798,15 +780,14 @@ class FeesManager:
                 is_sponsored = False
                 sponsor_reason = ""
 
-            db.collection("pupils").document(pupil_id).update({
+            supabase.table("pupils").update({
                 "name": name,
                 "class": class_name,
                 "term_fees": term_fees,
                 "pupil_type": pupil_type,
                 "is_sponsored": is_sponsored,
-                "sponsor_reason": sponsor_reason,
-                "updated_at": datetime.datetime.now().isoformat()
-            })
+                "sponsor_reason": sponsor_reason
+            }).eq("id", pupil_id).execute()
 
             cache.invalidate(data_type="pupils")
             cache.invalidate(f"pupil_{pupil_id}")
@@ -815,41 +796,18 @@ class FeesManager:
             st.error(f"Error updating pupil: {str(e)}")
             return False
 
-    def update_pupil_class(self, pupil_id, new_class):
-        """Update pupil's class (for promotion)"""
-        try:
-            db.collection("pupils").document(pupil_id).update({
-                "class": new_class,
-                "last_promoted_at": datetime.datetime.now().isoformat()
-            })
-            cache.invalidate(data_type="pupils")
-            cache.invalidate(f"pupil_{pupil_id}")
-            return True
-        except Exception as e:
-            return False
-
-    def update_pupil_term_status(self, pupil_id, term, year):
-        """Update pupil's current term tracking"""
-        try:
-            db.collection("pupils").document(pupil_id).update({
-                "current_term": term,
-                "current_year": year,
-                "last_advanced_at": datetime.datetime.now().isoformat()
-            })
-            return True
-        except Exception as e:
-            return False
-
     def archive_pupil(self, pupil_id, leaving_reason=""):
-        """Archive a pupil"""
+        if supabase is None:
+            return False
+
         try:
-            db.collection("pupils").document(pupil_id).update({
+            supabase.table("pupils").update({
                 "active": False,
                 "archived": True,
                 "leaving_date": datetime.datetime.now().isoformat(),
-                "leaving_reason": leaving_reason,
-                "archived_at": datetime.datetime.now().isoformat()
-            })
+                "leaving_reason": leaving_reason
+            }).eq("id", pupil_id).execute()
+
             cache.invalidate(data_type="pupils")
             cache.invalidate(f"pupil_{pupil_id}")
             return True
@@ -858,36 +816,23 @@ class FeesManager:
             return False
 
     def restore_pupil(self, pupil_id, return_term, return_year):
-        """Restore an archived pupil to a specific term"""
+        if supabase is None:
+            return False
+
         try:
-            pupil_data = self.get_pupil_details(pupil_id)
-            if not pupil_data:
-                return False
-
-            term_key = f"{return_year}_{return_term}"
-            enrollments = pupil_data.get("term_enrollments", {})
-
-            enrollments[term_key] = {
-                "active": True,
-                "class": pupil_data.get("class"),
-                "enrolled_at": datetime.datetime.now().isoformat(),
-                "term_fees": pupil_data.get("term_fees", 0),
-                "pupil_type": pupil_data.get("pupil_type", "Community Child"),
-                "restored": True
-            }
-
-            db.collection("pupils").document(pupil_id).update({
+            supabase.table("pupils").update({
                 "active": True,
                 "archived": False,
-                "restored_at": datetime.datetime.now().isoformat(),
-                "restored_term": return_term,
-                "restored_year": return_year,
-                "active_since_term": return_term,
-                "active_since_year": return_year,
                 "current_term": return_term,
-                "current_year": return_year,
-                "term_enrollments": enrollments
-            })
+                "current_year": return_year
+            }).eq("id", pupil_id).execute()
+
+            supabase.table("term_enrollments").insert({
+                "pupil_id": pupil_id,
+                "term": return_term,
+                "year": return_year,
+                "is_active": True
+            }).execute()
 
             cache.invalidate(data_type="pupils")
             cache.invalidate(f"pupil_{pupil_id}")
@@ -896,345 +841,206 @@ class FeesManager:
             st.error(f"Error restoring pupil: {str(e)}")
             return False
 
-    # ==================== NEW TERM ENROLLMENT METHODS ====================
-
     def enroll_pupil_into_term(self, pupil_id, term, year):
-        """Enroll a pupil into a specific term"""
+        if supabase is None:
+            return False
+
         try:
-            pupil_data = self.get_pupil_details(pupil_id)
-            if not pupil_data:
-                return False
-
-            term_key = f"{year}_{term}"
-            enrollments = pupil_data.get("term_enrollments", {})
-
-            enrollments[term_key] = {
-                "active": True,
-                "class": pupil_data.get("class"),
-                "enrolled_at": datetime.datetime.now().isoformat(),
-                "term_fees": pupil_data.get("term_fees", 0),
-                "pupil_type": pupil_data.get("pupil_type", "Community Child")
-            }
-
-            db.collection("pupils").document(pupil_id).update({
-                "term_enrollments": enrollments,
-                "current_term": term,
-                "current_year": year,
-                f"enrolled_in_{term}_{year}": True
-            })
-
+            supabase.table("term_enrollments").insert({
+                "pupil_id": pupil_id,
+                "term": term,
+                "year": year,
+                "is_active": True
+            }).execute()
             cache.invalidate(data_type="pupils")
-            cache.invalidate(f"pupil_{pupil_id}")
             return True
         except Exception as e:
             st.error(f"Error enrolling pupil into term: {str(e)}")
             return False
 
-    def is_enrolled_in_term(self, pupil_id, term, year):
-        """Check if pupil is enrolled in a specific term"""
-        pupil_data = self.get_pupil_details(pupil_id)
-        if not pupil_data:
-            return False
-
-        term_key = f"{year}_{term}"
-        enrollments = pupil_data.get("term_enrollments", {})
-        return enrollments.get(term_key, {}).get("active", False)
-
-    # ==================== END NEW METHODS ====================
-
     def add_payment(self, pupil_id, term, year, amount, description):
-        """Add a payment with excess handling (excess carries forward as credit)"""
+        if supabase is None:
+            return None, "Database not connected", None, None, 0
+
         try:
-            ledger_ref = db.collection("ledgers").document(pupil_id).collection(term)
-            pupil = self.get_pupil_details(pupil_id)
-            if not pupil:
-                return None, "Pupil not found", None, None, 0
+            result = supabase.rpc("process_payment", {
+                "p_pupil_id": pupil_id,
+                "p_term": term,
+                "p_year": int(year),
+                "p_amount": amount,
+                "p_description": description
+            }).execute()
 
-            term_fees = pupil.get("term_fees", 0)
-            is_sponsored = pupil.get("is_sponsored", False)
-
-            if is_sponsored:
-                term_fees = 0
-
-            year_int = int(year)
-            previous_balance = self.get_previous_term_balance(pupil_id, term, year_int)
-            existing_payments = self.get_ledger(pupil_id, term, year_int)
-            total_paid_this_term = sum([p.get("amount", 0) for p in existing_payments])
-
-            # Calculate total due (if previous balance is negative, it's a credit)
-            effective_previous = max(0, previous_balance) if previous_balance > 0 else 0
-            credit_amount = abs(previous_balance) if previous_balance < 0 else 0
-
-            total_due = effective_previous + term_fees
-            total_paid = total_paid_this_term + amount
-
-            # Apply credit first
-            if credit_amount > 0:
-                total_paid_with_credit = total_paid + credit_amount
-                if total_paid_with_credit >= total_due:
-                    new_balance = 0
-                    excess_amount = total_paid_with_credit - total_due
-                else:
-                    new_balance = total_due - total_paid_with_credit
-                    excess_amount = 0
-            else:
-                if total_paid > total_due:
-                    excess_amount = total_paid - total_due
-                    new_balance = 0
-                else:
-                    excess_amount = 0
-                    new_balance = total_due - total_paid
-
-            transaction_id = str(uuid.uuid4())
-            receipt_no = generate_receipt_number()
-
-            ledger_ref.document(transaction_id).set({
-                "date": datetime.datetime.now().isoformat(),
-                "amount": amount,
-                "description": description,
-                "balance": new_balance,
-                "previous_balance": previous_balance,
-                "term_fees": term_fees,
-                "total_due": total_due,
-                "year": year_int,
-                "receipt_no": receipt_no,
-                "excess_amount": excess_amount,
-                "credit_applied": credit_amount
-            })
-
-            # Invalidate caches
-            cache.invalidate(f"ledger_{pupil_id}_{term}_{year_int}", "ledger")
+            data = result.data
             cache.invalidate(data_type="stats")
             cache.invalidate(data_type="summary")
 
-            return transaction_id, new_balance, receipt_no, previous_balance, excess_amount
+            return (data.get('payment_id'), data.get('new_balance'),
+                    data.get('receipt_no'), data.get('previous_balance'),
+                    data.get('excess_amount'))
         except Exception as e:
             st.error(f"Error adding payment: {str(e)}")
             return None, str(e), None, None, 0
 
-    def get_pupil_term_summary(self, pupil_id, term, year):
-        """Get pupil term summary"""
-        pupil_data = self.get_pupil_details(pupil_id)
-        if not pupil_data:
-            return None, 0, 0, 0, 0, 0, False, "", False, "Community Child", 0
-
-        term_fees = pupil_data.get("term_fees", 0)
-        is_sponsored = pupil_data.get("is_sponsored", False)
-        sponsor_reason = pupil_data.get("sponsor_reason", "")
-        is_archived = pupil_data.get("archived", False)
-        pupil_type = pupil_data.get("pupil_type", "Community Child")
-
-        if is_sponsored:
-            term_fees = 0
-
-        previous_balance = self.get_previous_term_balance(pupil_id, term, year)
-        payments = self.get_ledger(pupil_id, term, year)
-        total_paid = sum([p.get("amount", 0) for p in payments])
-
-        credit_amount = abs(previous_balance) if previous_balance < 0 else 0
-        effective_previous = max(0, previous_balance) if previous_balance > 0 else 0
-
-        total_due = effective_previous + term_fees
-        balance = max(0, total_due - total_paid - credit_amount)
-
-        return (pupil_data, term_fees, total_paid, balance, previous_balance,
-                credit_amount, is_sponsored, sponsor_reason, is_archived, pupil_type, effective_previous)
-
     def get_class_summary(self, class_name, term, year, include_archived=False):
-        """Get class summary as DataFrames"""
-        pupils = self.get_pupils_for_term(class_name, term, year, include_archived)
-        summary = []
-        cleared_list = []
-        not_cleared_list = []
-        archived_list = []
+        if supabase is None:
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-        for pupil in pupils:
-            pupil_id = pupil.get('id')
-            term_fees = pupil.get("term_fees", 0)
-            is_sponsored = pupil.get("is_sponsored", False)
-            sponsor_reason = pupil.get("sponsor_reason", "")
-            is_archived = pupil.get("archived", False)
-            pupil_type = pupil.get("pupil_type", "Community Child")
+        try:
+            result = supabase.rpc("get_class_summary", {
+                "p_class": class_name,
+                "p_term": term,
+                "p_year": int(year),
+                "p_include_archived": include_archived
+            }).execute()
 
-            if is_sponsored:
-                term_fees = 0
+            summary_data = result.data
+            df_summary = pd.DataFrame(summary_data).reset_index(drop=True)
+            if not df_summary.empty:
+                df_summary.insert(0, "No.", range(1, len(df_summary) + 1))
 
-            previous_balance = self.get_previous_term_balance(pupil_id, term, year)
-            payments = self.get_ledger(pupil_id, term, year)
-            total_paid = sum([p.get("amount", 0) for p in payments])
+            df_cleared = df_summary[df_summary["status"] == "Cleared"] if not df_summary.empty else pd.DataFrame()
+            df_not_cleared = df_summary[
+                df_summary["status"] == "Not Cleared"] if not df_summary.empty else pd.DataFrame()
+            df_archived = df_summary[
+                df_summary["status"].str.contains("Archived", na=False)] if not df_summary.empty else pd.DataFrame()
 
-            credit_amount = abs(previous_balance) if previous_balance < 0 else 0
-            effective_previous = max(0, previous_balance) if previous_balance > 0 else 0
-
-            total_due = effective_previous + term_fees
-            balance = max(0, total_due - total_paid - credit_amount)
-
-            if is_archived:
-                status = "Archived (Left School)"
-            else:
-                status = "Cleared" if balance == 0 else "Not Cleared"
-                if is_sponsored:
-                    status = f"Sponsored - {sponsor_reason}"
-
-            pupil_info = {
-                "Name": pupil["name"],
-                "Pupil Type": pupil_type,
-                "Enrolled": f"{pupil.get('enrollment_term', 'Term 1')} {pupil.get('enrollment_year', year)}",
-                "Previous Bal (UGX)": previous_balance,
-                "Credit (UGX)": credit_amount if credit_amount > 0 else 0,
-                "Term Fees (UGX)": term_fees,
-                "Total Due (UGX)": total_due,
-                "Total Paid (UGX)": total_paid,
-                "Balance (UGX)": balance,
-                "Status": status,
-                "Sponsor Reason": sponsor_reason if is_sponsored else "",
-            }
-            summary.append(pupil_info)
-
-            if is_archived:
-                archived_list.append(pupil_info)
-            elif balance == 0 or is_sponsored:
-                cleared_list.append(pupil_info)
-            else:
-                not_cleared_list.append(pupil_info)
-
-        df_summary = pd.DataFrame(summary).reset_index(drop=True)
-        df_cleared = pd.DataFrame(cleared_list).reset_index(drop=True)
-        df_not_cleared = pd.DataFrame(not_cleared_list).reset_index(drop=True)
-        df_archived = pd.DataFrame(archived_list).reset_index(drop=True)
-
-        if not df_summary.empty:
-            df_summary.insert(0, "No.", range(1, len(df_summary) + 1))
-        if not df_cleared.empty:
-            df_cleared.insert(0, "No.", range(1, len(df_cleared) + 1))
-        if not df_not_cleared.empty:
-            df_not_cleared.insert(0, "No.", range(1, len(df_not_cleared) + 1))
-        if not df_archived.empty:
-            df_archived.insert(0, "No.", range(1, len(df_archived) + 1))
-
-        return df_summary, df_cleared, df_not_cleared, df_archived
+            return df_summary, df_cleared, df_not_cleared, df_archived
+        except Exception as e:
+            st.error(f"Error getting class summary: {str(e)}")
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     def get_school_wide_summary(self, term, year, include_archived=False):
-        """Get school-wide summary as DataFrames"""
-        cache_key = f"summary_{term}_{year}_{include_archived}"
-        cached_result = cache.get(cache_key, "summary")
-        if cached_result is not None:
-            return cached_result
+        cache_key = f"school_summary_{term}_{year}_{include_archived}"
+        cached = cache.get(cache_key, "summary")
+        if cached is not None:
+            return cached
 
-        all_pupils = self.get_all_pupils(include_archived)
-        all_summaries = []
-        staff_summaries = []
-        shepherd_summaries = []
-        community_summaries = []
+        if supabase is None:
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-        for pupil in all_pupils:
-            pupil_id = pupil.get('id')
-            term_fees = pupil.get("term_fees", 0)
-            is_sponsored = pupil.get("is_sponsored", False)
-            sponsor_reason = pupil.get("sponsor_reason", "")
-            is_archived = pupil.get("archived", False)
-            pupil_type = pupil.get("pupil_type", "Community Child")
+        try:
+            all_summaries = []
+            for class_name in self.classes:
+                result = supabase.rpc("get_class_summary", {
+                    "p_class": class_name,
+                    "p_term": term,
+                    "p_year": int(year),
+                    "p_include_archived": include_archived
+                }).execute()
 
-            if is_sponsored:
-                term_fees = 0
+                for row in result.data:
+                    row["Class"] = class_name
+                    all_summaries.append(row)
 
-            previous_balance = self.get_previous_term_balance(pupil_id, term, year)
-            payments = self.get_ledger(pupil_id, term, year)
-            total_paid = sum([p.get("amount", 0) for p in payments])
+            df_all = pd.DataFrame(all_summaries).reset_index(drop=True)
+            if not df_all.empty:
+                df_all.insert(0, "No.", range(1, len(df_all) + 1))
 
-            credit_amount = abs(previous_balance) if previous_balance < 0 else 0
-            effective_previous = max(0, previous_balance) if previous_balance > 0 else 0
+            df_staff = df_all[df_all["pupil_type"] == "Staff Child"] if not df_all.empty else pd.DataFrame()
+            df_shepherd = df_all[df_all["pupil_type"] == "Shepherd Child"] if not df_all.empty else pd.DataFrame()
+            df_community = df_all[df_all["pupil_type"] == "Community Child"] if not df_all.empty else pd.DataFrame()
 
-            total_due = effective_previous + term_fees
-            balance = max(0, total_due - total_paid - credit_amount)
-
-            if is_archived:
-                status = "Archived (Left School)"
-            else:
-                status = "Cleared" if balance == 0 else "Not Cleared"
-                if is_sponsored:
-                    status = f"Sponsored - {sponsor_reason}"
-
-            record = {
-                "Class": pupil["class"],
-                "Name": pupil["name"],
-                "Pupil Type": pupil_type,
-                "Enrolled": f"{pupil.get('enrollment_term', 'Term 1')} {pupil.get('enrollment_year', year)}",
-                "Credit (UGX)": credit_amount if credit_amount > 0 else 0,
-                "Term Fees (UGX)": term_fees,
-                "Total Paid (UGX)": total_paid,
-                "Balance (UGX)": balance,
-                "Status": status,
-            }
-            all_summaries.append(record)
-
-            if pupil_type == "Staff Child" and not is_archived:
-                staff_summaries.append(record)
-            elif pupil_type == "Shepherd Child" and not is_archived:
-                shepherd_summaries.append(record)
-            elif pupil_type == "Community Child" and not is_archived:
-                community_summaries.append(record)
-
-        df_all = pd.DataFrame(all_summaries).reset_index(drop=True)
-        df_staff = pd.DataFrame(staff_summaries).reset_index(drop=True)
-        df_shepherd = pd.DataFrame(shepherd_summaries).reset_index(drop=True)
-        df_community = pd.DataFrame(community_summaries).reset_index(drop=True)
-
-        if not df_all.empty:
-            df_all.insert(0, "No.", range(1, len(df_all) + 1))
-
-        result = (df_all, df_staff, df_shepherd, df_community)
-        cache.set(cache_key, result, "summary")
-        return result
+            result = (df_all, df_staff, df_shepherd, df_community)
+            cache.set(cache_key, result, "summary")
+            return result
+        except:
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     def get_dashboard_stats(self, term, year):
-        """Get dashboard statistics with caching"""
         cache_key = f"stats_{term}_{year}"
         cached = cache.get(cache_key, "stats")
         if cached is not None:
             return cached
 
-        all_pupils = self.get_all_pupils(include_archived=False)
+        if supabase is None:
+            return {
+                "total_pupils": 0,
+                "staff_children": 0,
+                "shepherd_children": 0,
+                "community_children": 0,
+                "total_expected": 0,
+                "total_collected": 0,
+                "total_balance": 0,
+                "collection_rate": 0
+            }
 
-        stats = {
-            "total_pupils": len(all_pupils),
-            "staff_children": 0,
-            "shepherd_children": 0,
-            "community_children": 0,
-            "total_expected": 0,
-            "total_collected": 0,
-            "total_balance": 0,
-            "collection_rate": 0
-        }
+        try:
+            all_pupils = self.get_all_pupils(include_archived=False)
 
-        for pupil in all_pupils:
-            pupil_type = pupil.get("pupil_type", "Community Child")
-            term_fees = pupil.get("term_fees", 0)
-            is_sponsored = pupil.get("is_sponsored", False)
+            stats = {
+                "total_pupils": len(all_pupils),
+                "staff_children": 0,
+                "shepherd_children": 0,
+                "community_children": 0,
+                "total_expected": 0,
+                "total_collected": 0,
+                "total_balance": 0,
+                "collection_rate": 0
+            }
 
-            if is_sponsored:
-                term_fees = 0
+            for pupil in all_pupils:
+                pupil_type = pupil.get("pupil_type", "Community Child")
+                term_fees = pupil.get("term_fees", 0)
+                is_sponsored = pupil.get("is_sponsored", False)
 
-            if pupil_type == "Staff Child":
-                stats["staff_children"] += 1
-            elif pupil_type == "Shepherd Child":
-                stats["shepherd_children"] += 1
-            else:
-                stats["community_children"] += 1
+                if is_sponsored:
+                    term_fees = 0
 
-            stats["total_expected"] += term_fees
+                if pupil_type == "Staff Child":
+                    stats["staff_children"] += 1
+                elif pupil_type == "Shepherd Child":
+                    stats["shepherd_children"] += 1
+                else:
+                    stats["community_children"] += 1
 
-            pupil_id = pupil.get('id')
-            payments = self.get_ledger(pupil_id, term, year)
-            total_paid = sum([p.get("amount", 0) for p in payments])
-            stats["total_collected"] += total_paid
+                stats["total_expected"] += term_fees
 
-        stats["total_balance"] = stats["total_expected"] - stats["total_collected"]
-        if stats["total_expected"] > 0:
-            stats["collection_rate"] = (stats["total_collected"] / stats["total_expected"]) * 100
+                result = supabase.table("payments").select("amount") \
+                    .eq("pupil_id", pupil.get("id")) \
+                    .eq("term", term) \
+                    .eq("year", int(year)) \
+                    .execute()
 
-        cache.set(cache_key, stats, "stats")
-        return stats
+                total_paid = sum([p.get("amount", 0) for p in result.data])
+                stats["total_collected"] += total_paid
+
+            stats["total_balance"] = stats["total_expected"] - stats["total_collected"]
+            if stats["total_expected"] > 0:
+                stats["collection_rate"] = (stats["total_collected"] / stats["total_expected"]) * 100
+
+            cache.set(cache_key, stats, "stats")
+            return stats
+        except Exception as e:
+            st.error(f"Error getting dashboard stats: {str(e)}")
+            return {
+                "total_pupils": 0,
+                "staff_children": 0,
+                "shepherd_children": 0,
+                "community_children": 0,
+                "total_expected": 0,
+                "total_collected": 0,
+                "total_balance": 0,
+                "collection_rate": 0
+            }
+
+
+# ==================== AUTHENTICATION ====================
+def authenticate_user(username, password):
+    if supabase is None:
+        return None
+
+    try:
+        result = supabase.table("users").select("*").eq("username", username).execute()
+        if result.data:
+            user_data = result.data[0]
+            stored_password = user_data.get("password", "")
+            if stored_password == hash_password(password):
+                return user_data.get("role", "admin")
+        return None
+    except Exception as e:
+        st.error(f"Authentication error: {str(e)}")
+        return None
 
 
 # ==================== LOGIN PAGE ====================
@@ -1272,27 +1078,6 @@ def login_page():
             </div>
             """, unsafe_allow_html=True)
 
-        # Create default users if none exist
-        try:
-            users_ref = db.collection("users")
-            if len(list(users_ref.stream())) == 0:
-                users_ref.document("bursar").set({
-                    "username": "bursar",
-                    "password": hash_password("bursar123"),
-                    "role": "bursar",
-                    "full_name": "School Bursar",
-                    "created_at": datetime.datetime.now()
-                })
-                users_ref.document("admin").set({
-                    "username": "admin",
-                    "password": hash_password("admin123"),
-                    "role": "admin",
-                    "full_name": "School Administrator",
-                    "created_at": datetime.datetime.now()
-                })
-        except:
-            pass
-
         with st.form(key="login_form"):
             username = st.text_input("Username", placeholder="Enter your username")
             password = st.text_input("Password", type="password", placeholder="Enter your password")
@@ -1302,22 +1087,14 @@ def login_page():
                 if not username or not password:
                     st.error("Please enter both username and password")
                 else:
-                    try:
-                        users_ref = db.collection("users")
-                        user_doc = users_ref.document(username).get()
-                        if user_doc.exists:
-                            user_data = user_doc.to_dict()
-                            if user_data.get("password") == hash_password(password):
-                                st.session_state.logged_in = True
-                                st.session_state.username = username
-                                st.session_state.role = user_data.get("role", "admin")
-                                st.rerun()
-                            else:
-                                st.error("Invalid username or password")
-                        else:
-                            st.error("Invalid username or password")
-                    except Exception as e:
-                        st.error(f"Authentication error: {str(e)}")
+                    role = authenticate_user(username, password)
+                    if role:
+                        st.session_state.logged_in = True
+                        st.session_state.username = username
+                        st.session_state.role = role
+                        st.rerun()
+                    else:
+                        st.error("Invalid username or password")
 
 
 # ==================== MAIN APP ====================
@@ -1357,7 +1134,6 @@ def main_app():
                     unsafe_allow_html=True)
 
         st.markdown("---")
-
         st.markdown("### Navigation")
 
         if role == "bursar":
@@ -1379,22 +1155,22 @@ def main_app():
         st.markdown("---")
         st.markdown("### Period")
         current_term = st.selectbox("Term", ["Term 1", "Term 2", "Term 3"], key="global_term")
-        current_year = st.number_input("Year", min_value=2020, max_value=2030, value=datetime.datetime.now().year, step=1)
+        current_year = st.number_input("Year", min_value=2020, max_value=2030, value=datetime.datetime.now().year,
+                                       step=1)
 
         st.markdown("---")
 
-        # Term Enrollment Section (MOVED HERE - AFTER current_term/current_year are defined)
+        # Term Enrollment Section
         if role == "bursar":
             st.markdown("### 📋 Term Enrollment")
 
-            # Determine previous term
             term_order_list = ["Term 1", "Term 2", "Term 3"]
             try:
                 current_idx = term_order_list.index(current_term)
             except:
                 current_idx = 0
 
-            if current_idx == 0:  # Term 1
+            if current_idx == 0:
                 prev_term = "Term 3"
                 prev_year = current_year - 1
             else:
@@ -1412,10 +1188,11 @@ def main_app():
                 st.rerun()
             st.markdown("---")
 
-        # Show enrollment dialog if flag is set (ALSO MOVED HERE)
+        manager = FeesManager()
+
+        # Show enrollment dialog if flag is set
         if st.session_state.get("show_enrollment_dialog", False):
             with st.expander("📋 Enroll Pupils", expanded=True):
-                # Get pupils from previous term
                 prev_pupils = manager.get_pupils_for_term("All Classes",
                                                           st.session_state.enroll_from_term,
                                                           st.session_state.enroll_from_year,
@@ -1426,10 +1203,16 @@ def main_app():
 
                 selected_pupils = []
                 for pupil in prev_pupils:
-                    # Check if already enrolled in current term
-                    term_key = f"{st.session_state.enroll_to_year}_{st.session_state.enroll_to_term}"
-                    enrollments = pupil.get("term_enrollments", {})
-                    already_enrolled = enrollments.get(term_key, {}).get("active", False)
+                    # Check if already enrolled
+                    try:
+                        result = supabase.table("term_enrollments").select("*") \
+                            .eq("pupil_id", pupil.get("id")) \
+                            .eq("term", st.session_state.enroll_to_term) \
+                            .eq("year", st.session_state.enroll_to_year) \
+                            .execute()
+                        already_enrolled = len(result.data) > 0
+                    except:
+                        already_enrolled = False
 
                     if already_enrolled:
                         st.info(f"✅ {pupil['name']} ({pupil['class']}) - Already enrolled")
@@ -1467,12 +1250,6 @@ def main_app():
             cache.clear_all()
             st.rerun()
 
-        st.markdown("---")
-
-
-
-    manager = FeesManager()
-
     # ------------------- DASHBOARD -------------------
     if menu == "Dashboard":
         st.markdown("<h2 style='color: #1E3A5F; margin-bottom: 0.5rem; font-size: 1.3rem;'>Dashboard</h2>",
@@ -1480,7 +1257,6 @@ def main_app():
 
         stats = manager.get_dashboard_stats(current_term, current_year)
 
-        # Row 1 - Compact Cards
         col1, col2, col3, col4, col5, col6 = st.columns(6)
 
         with col1:
@@ -1531,7 +1307,6 @@ def main_app():
             </div>
             """, unsafe_allow_html=True)
 
-        # Row 2 - Compact Cards
         col1, col2, col3 = st.columns(3)
 
         with col1:
@@ -1644,7 +1419,6 @@ def main_app():
 
                 all_transactions = []
 
-                # Show credit from previous term
                 if credit_amount > 0:
                     term_order = manager.term_order[current_term]
                     if term_order == 1:
@@ -1666,7 +1440,7 @@ def main_app():
                 for idx, entry in enumerate(ledger_entries, 1):
                     all_transactions.append({
                         "S/No": idx,
-                        "Date": entry.get("date", "")[:10] if entry.get("date") else "",
+                        "Date": entry.get("payment_date", ""),
                         "Amount Paid": f"UGX {entry.get('amount', 0):,.0f}",
                         "Credit Applied": "UGX 0",
                         "Description": entry.get("description", "Payment"),
@@ -1711,7 +1485,7 @@ def main_app():
                                         school_name="Shepherd Academy Busiu",
                                         logo_path="images.jfif" if os.path.exists("images.jfif") else "",
                                         receipt_num=entry.get('receipt_no', ''),
-                                        date_str=entry.get('date', '')[:10],
+                                        date_str=entry.get('payment_date', ''),
                                         child_name=pupil['name'],
                                         amount=entry.get('amount', 0),
                                         description=entry.get('description', ''),
