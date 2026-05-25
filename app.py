@@ -1731,24 +1731,21 @@ def main_app():
                         df_full["status"] != "Archived (Left School)"] if not df_full.empty else pd.DataFrame()
 
                 if not financial_df.empty:
-                    # Calculate totals
+                    # Use correct column names
                     total_pupils = len(financial_df)
                     total_expected = financial_df["term_fees"].sum() if "term_fees" in financial_df.columns else 0
                     total_paid = financial_df["total_paid"].sum() if "total_paid" in financial_df.columns else 0
                     total_balance = financial_df["balance"].sum() if "balance" in financial_df.columns else 0
 
-                    # Calculate cleared vs not cleared
                     cleared_count = len(
                         financial_df[financial_df["status"] == "Cleared"]) if "status" in financial_df.columns else 0
                     not_cleared_count = len(financial_df[financial_df[
                                                              "status"] == "Not Cleared"]) if "status" in financial_df.columns else 0
 
-                    # Calculate percentage
                     collection_rate = (total_paid / total_expected * 100) if total_expected > 0 else 0
 
-                    # Row 1: Overall metrics
+                    # Display metrics
                     col_a, col_b, col_c, col_d, col_e, col_f = st.columns(6)
-
                     with col_a:
                         st.metric("📚 Total Pupils", total_pupils)
                     with col_b:
@@ -1762,7 +1759,6 @@ def main_app():
                     with col_f:
                         st.metric("❌ Not Cleared", not_cleared_count)
 
-                    # Progress bar
                     if collection_rate > 0:
                         st.progress(collection_rate / 100)
                         st.caption(f"📈 Collection Progress: {collection_rate:.1f}%")
@@ -1783,24 +1779,15 @@ def main_app():
                         if not category_stats.empty:
                             cat_col1, cat_col2, cat_col3 = st.columns(3)
 
-                            category_icons = {
-                                "Staff Child": "👩‍🏫",
-                                "Shepherd Child": "🙏",
-                                "Community Child": "👨‍👩‍👧"
-                            }
-
                             for idx, (cat_type, row) in enumerate(category_stats.iterrows()):
-                                icon = category_icons.get(cat_type, "📌")
                                 cat_col = [cat_col1, cat_col2, cat_col3][idx % 3]
                                 with cat_col:
-                                    # Calculate category collection rate
-                                    cat_expected = row['term_fees']
-                                    cat_paid = row['total_paid']
-                                    cat_rate = (cat_paid / cat_expected * 100) if cat_expected > 0 else 0
+                                    cat_rate = (row['total_paid'] / row['term_fees'] * 100) if row[
+                                                                                                   'term_fees'] > 0 else 0
 
                                     st.markdown(f"""
                                     <div style="background: linear-gradient(135deg, #F8F9FA 0%, #FFFFFF 100%); border-radius: 12px; padding: 12px; margin: 5px 0; border-left: 4px solid #1E3A5F;">
-                                        <h4 style="color: #1E3A5F; margin: 0 0 8px 0; font-size: 1rem;">{icon} {cat_type}</h4>
+                                        <h4 style="color: #1E3A5F; margin: 0 0 8px 0; font-size: 1rem;">{cat_type}</h4>
                                         <p style="margin: 3px 0; font-size: 0.75rem;">👥 Count: {int(row['count'])}</p>
                                         <p style="margin: 3px 0; font-size: 0.75rem;">💰 Expected: UGX {row['term_fees']:,.0f}</p>
                                         <p style="margin: 3px 0; font-size: 0.75rem;">✅ Paid: UGX {row['total_paid']:,.0f}</p>
@@ -1810,23 +1797,6 @@ def main_app():
                                     """, unsafe_allow_html=True)
                 else:
                     st.info("No financial data available for this report")
-
-                st.markdown("---")
-                st.subheader("Export Options")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    csv = df_to_show.to_csv(index=False).encode()
-                    st.download_button("📊 CSV", csv, f"{selected_class}_{current_term}_{current_year}_report.csv",
-                                       "text/csv")
-                with col2:
-                    excel_data = {"Summary": df_full, "Cleared": df_cleared, "With Balance": df_not_cleared,
-                                  "Archived": df_archived}
-                    st.download_button("📘 Excel", export_to_excel(excel_data, "report.xlsx"),
-                                       f"{selected_class}_{current_term}_{current_year}_report.xlsx")
-                with col3:
-                    pdf_buffer = export_summary_to_pdf(df_to_show, f"{selected_class} Report", "report.pdf")
-                    st.download_button("📄 PDF", pdf_buffer,
-                                       f"{selected_class}_{current_term}_{current_year}_report.pdf", "application/pdf")
 
     # ------------------- SCHOOL REPORTS -------------------
     elif menu == "School Reports":
@@ -1875,26 +1845,21 @@ def main_app():
                 st.markdown("### 📊 School-Wide Summary Statistics")
 
                 # Filter out archived for financial stats
-                financial_df = df_to_show[
-                    df_to_show["Status"] != "Archived (Left School)"] if not df_to_show.empty else pd.DataFrame()
+                financial_df = df_to_show[df_to_show["Status"] != "Archived (Left School)"] if not df_to_show.empty else pd.DataFrame()
 
                 if not financial_df.empty:
+                    # Use correct column names from school summary
                     total_pupils = len(financial_df)
-                    total_expected = financial_df[
-                        "Term Fees (UGX)"].sum() if "Term Fees (UGX)" in financial_df.columns else 0
-                    total_paid = financial_df[
-                        "Total Paid (UGX)"].sum() if "Total Paid (UGX)" in financial_df.columns else 0
-                    total_balance = financial_df[
-                        "Balance (UGX)"].sum() if "Balance (UGX)" in financial_df.columns else 0
+                    total_expected = financial_df["Term Fees (UGX)"].sum() if "Term Fees (UGX)" in financial_df.columns else 0
+                    total_paid = financial_df["Total Paid (UGX)"].sum() if "Total Paid (UGX)" in financial_df.columns else 0
+                    total_balance = financial_df["Balance (UGX)"].sum() if "Balance (UGX)" in financial_df.columns else 0
 
-                    cleared_count = len(
-                        financial_df[financial_df["Status"] == "Cleared"]) if "Status" in financial_df.columns else 0
-                    not_cleared_count = len(financial_df[financial_df[
-                                                             "Status"] == "Not Cleared"]) if "Status" in financial_df.columns else 0
+                    cleared_count = len(financial_df[financial_df["Status"] == "Cleared"]) if "Status" in financial_df.columns else 0
+                    not_cleared_count = len(financial_df[financial_df["Status"] == "Not Cleared"]) if "Status" in financial_df.columns else 0
 
                     collection_rate = (total_paid / total_expected * 100) if total_expected > 0 else 0
 
-                    # Row 1: Overall metrics
+                    # Display metrics
                     col_a, col_b, col_c, col_d, col_e, col_f = st.columns(6)
                     with col_a:
                         st.metric("📚 Total Pupils", total_pupils)
@@ -1918,7 +1883,7 @@ def main_app():
                     # ========== PERFORMANCE BY CLASS ==========
                     st.markdown("### 🏫 Performance by Class")
 
-                    if "Class" in financial_df.columns and "Term Fees (UGX)" in financial_df.columns:
+                    if "Class" in financial_df.columns:
                         class_summary = financial_df.groupby("Class").agg({
                             "Term Fees (UGX)": "sum",
                             "Total Paid (UGX)": "sum",
@@ -1926,12 +1891,9 @@ def main_app():
                             "Name": "count"
                         }).rename(columns={"Name": "Pupils"})
 
-                        class_summary["Collection Rate"] = (
-                                    class_summary["Total Paid (UGX)"] / class_summary["Term Fees (UGX)"] * 100).fillna(
-                            0).round(1)
+                        class_summary["Collection Rate"] = (class_summary["Total Paid (UGX)"] / class_summary["Term Fees (UGX)"] * 100).fillna(0).round(1)
                         class_summary = class_summary.sort_values("Class")
 
-                        # Display class summary as a table
                         st.dataframe(
                             class_summary.style.format({
                                 "Term Fees (UGX)": "UGX {:,.0f}",
@@ -1942,7 +1904,6 @@ def main_app():
                             use_container_width=True
                         )
 
-                        # Bar chart for collection rate by class
                         if len(class_summary) > 1:
                             fig = px.bar(
                                 class_summary.reset_index(),
@@ -1956,9 +1917,6 @@ def main_app():
                             fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
                             fig.update_layout(plot_bgcolor='white', paper_bgcolor='white', height=400)
                             st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            # Single class - just show metric
-                            st.metric("Collection Rate", f"{class_summary['Collection Rate'].iloc[0]:.1f}%")
 
                     st.markdown("---")
 
@@ -1973,25 +1931,15 @@ def main_app():
                             "Name": "count"
                         }).rename(columns={"Name": "Pupils"})
 
-                        category_summary["Collection Rate"] = (category_summary["Total Paid (UGX)"] / category_summary[
-                            "Term Fees (UGX)"] * 100).fillna(0).round(1)
+                        category_summary["Collection Rate"] = (category_summary["Total Paid (UGX)"] / category_summary["Term Fees (UGX)"] * 100).fillna(0).round(1)
 
-                        # Display category summary in columns
-                        cat_col1, cat_col2, cat_col3 = st.columns(3)
-
-                        category_icons = {
-                            "Staff Child": "👩‍🏫",
-                            "Shepherd Child": "🙏",
-                            "Community Child": "👨‍👩‍👧"
-                        }
-
+                        # Create columns for each category
+                        cat_cols = st.columns(len(category_summary))
                         for idx, (cat_type, row) in enumerate(category_summary.iterrows()):
-                            icon = category_icons.get(cat_type, "📌")
-                            cat_col = [cat_col1, cat_col2, cat_col3][idx % 3]
-                            with cat_col:
+                            with cat_cols[idx]:
                                 st.markdown(f"""
                                 <div style="background: linear-gradient(135deg, #F8F9FA 0%, #FFFFFF 100%); border-radius: 15px; padding: 15px; margin: 5px 0; border-left: 4px solid #1E3A5F;">
-                                    <h3 style="color: #1E3A5F; margin: 0 0 10px 0; font-size: 1rem;">{icon} {cat_type}</h3>
+                                    <h3 style="color: #1E3A5F; margin: 0 0 10px 0; font-size: 1rem;">{cat_type}</h3>
                                     <p style="margin: 5px 0; font-size: 0.75rem;">👥 Pupils: {int(row['Pupils'])}</p>
                                     <p style="margin: 5px 0; font-size: 0.75rem;">💰 Expected: UGX {row['Term Fees (UGX)']:,.0f}</p>
                                     <p style="margin: 5px 0; font-size: 0.75rem;">✅ Paid: UGX {row['Total Paid (UGX)']:,.0f}</p>
@@ -2000,7 +1948,7 @@ def main_app():
                                 </div>
                                 """, unsafe_allow_html=True)
 
-                        # Pie chart for category distribution
+                        # Pie chart
                         fig2 = px.pie(
                             category_summary.reset_index(),
                             values="Pupils",
@@ -2011,38 +1959,7 @@ def main_app():
                         fig2.update_layout(plot_bgcolor='white', paper_bgcolor='white', height=400)
                         st.plotly_chart(fig2, use_container_width=True)
 
-                    st.markdown("---")
 
-                    # ========== TOP PERFORMING CLASSES ==========
-                    if "Class" in financial_df.columns and len(class_summary) > 5:
-                        st.markdown("### 🏆 Top 5 Performing Classes")
-
-                        top_classes = class_summary.nlargest(5, "Collection Rate")[
-                            ["Pupils", "Term Fees (UGX)", "Total Paid (UGX)", "Collection Rate"]]
-                        st.dataframe(
-                            top_classes.style.format({
-                                "Term Fees (UGX)": "UGX {:,.0f}",
-                                "Total Paid (UGX)": "UGX {:,.0f}",
-                                "Collection Rate": "{:.1f}%"
-                            }),
-                            use_container_width=True
-                        )
-                    elif "Class" in financial_df.columns and len(class_summary) > 0:
-                        st.markdown("### 🏆 Class Performance Summary")
-                        # Show all classes if less than 5
-                        st.dataframe(
-                            class_summary[["Pupils", "Term Fees (UGX)", "Total Paid (UGX)", "Collection Rate"]].style.format({
-                                "Term Fees (UGX)": "UGX {:,.0f}",
-                                "Total Paid (UGX)": "UGX {:,.0f}",
-                                "Collection Rate": "{:.1f}%"
-                            }),
-                            use_container_width=True
-                        )
-
-                st.markdown("---")
-                st.subheader("Export Options")
-                csv = df_to_show.to_csv(index=False).encode()
-                st.download_button("📊 Download CSV", csv, f"school_wide_{current_term}_{current_year}.csv", "text/csv")
     # ------------------- MANAGE PUPILS -------------------
     elif menu == "Manage Pupils" and role == "bursar":
         st.markdown("<h1 style='color: #1E3A5F; font-size: 1.5rem;'>Manage Pupils</h1>", unsafe_allow_html=True)
