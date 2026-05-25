@@ -37,6 +37,8 @@ if "app_initialized" not in st.session_state:
     st.session_state.username = ""
     st.session_state.role = ""
     st.session_state.show_enrollment_dialog = False
+    st.session_state.quick_pay_pupil = None
+    st.session_state.quick_pay_name = ""
 
 # ------------------- Modern Color Scheme -------------------
 COLORS = {
@@ -441,6 +443,13 @@ def generate_pdf_receipt(school_name, logo_path, receipt_num, date_str, child_na
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
+
+    # Ensure values are numbers (not None)
+    previous_balance = previous_balance if previous_balance is not None else 0
+    term_fees = term_fees if term_fees is not None else 0
+    balance = balance if balance is not None else 0
+    amount = amount if amount is not None else 0
+    excess_amount = excess_amount if excess_amount is not None else 0
 
     try:
         if os.path.exists(logo_path):
@@ -1240,7 +1249,7 @@ def main_app():
                         st.rerun()
 
         if role == "bursar" and menu in ["Pupils & Ledgers", "Class Reports", "School Reports"]:
-            show_archived = st.checkbox("Show Archived Pupils", value=st.session_state.show_archived,
+            show_archived = st.checkbox("Show Archived Pupils", value=st.session_state.get("show_archived", False),
                                         key="show_archived_checkbox")
             st.session_state.show_archived = show_archived
 
