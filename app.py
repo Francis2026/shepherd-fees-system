@@ -1400,31 +1400,80 @@ def main_app():
 
         stats = manager.get_dashboard_stats(current_term, current_year)
 
-        # Row 1
+        # Row 1 - Compact Cards
         col1, col2, col3, col4, col5, col6 = st.columns(6)
-        with col1:
-            st.metric("📚 Total Pupils", stats["total_pupils"])
-        with col2:
-            st.metric("👩‍🏫 Staff", stats["staff_children"])
-        with col3:
-            st.metric("🙏 Shepherd", stats["shepherd_children"])
-        with col4:
-            st.metric("👨‍👩‍👧 Community", stats["community_children"])
-        with col5:
-            st.metric("💰 Collected", f"UGX {stats['total_collected']:,.0f}")
-        with col6:
-            st.metric("📈 Rate", f"{stats['collection_rate']:.1f}%")
 
-        # Row 2
-        col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("🎯 Expected", f"UGX {stats['total_expected']:,.0f}")
+            st.markdown(f"""
+            <div style="background: white; border-radius: 12px; padding: 8px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
+                <p style="font-size: 1.6rem; font-weight: 700; color: #1E3A5F; margin: 0;">{stats['total_pupils']}</p>
+                <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Total Pupils</p>
+            </div>
+            """, unsafe_allow_html=True)
+
         with col2:
-            st.metric("⚠️ Balance", f"UGX {stats['total_balance']:,.0f}")
+            st.markdown(f"""
+            <div style="background: white; border-radius: 12px; padding: 8px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
+                <p style="font-size: 1.6rem; font-weight: 700; color: #17A2B8; margin: 0;">{stats['staff_children']}</p>
+                <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Staff Children</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col3:
+            st.markdown(f"""
+            <div style="background: white; border-radius: 12px; padding: 8px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
+                <p style="font-size: 1.6rem; font-weight: 700; color: #20B2AA; margin: 0;">{stats['shepherd_children']}</p>
+                <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Shepherd Children</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col4:
+            st.markdown(f"""
+            <div style="background: white; border-radius: 12px; padding: 8px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
+                <p style="font-size: 1.6rem; font-weight: 700; color: #6C757D; margin: 0;">{stats['community_children']}</p>
+                <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Community Children</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col5:
+            st.markdown(f"""
+            <div style="background: white; border-radius: 12px; padding: 8px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
+                <p style="font-size: 0.9rem; font-weight: 700; color: #28A745; margin: 0;">UGX {stats['total_collected']:,.0f}</p>
+                <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Total Collected</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col6:
+            st.markdown(f"""
+            <div style="background: white; border-radius: 12px; padding: 8px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
+                <p style="font-size: 1.6rem; font-weight: 700; color: #1E3A5F; margin: 0;">{stats['collection_rate']:.1f}%</p>
+                <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Collection Rate</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Row 2 - Compact Cards
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.markdown(f"""
+            <div style="background: white; border-radius: 12px; padding: 8px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
+                <p style="font-size: 0.9rem; font-weight: 700; color: #1E3A5F; margin: 0;">UGX {stats['total_expected']:,.0f}</p>
+                <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Total Expected</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col2:
+            st.markdown(f"""
+            <div style="background: white; border-radius: 12px; padding: 8px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
+                <p style="font-size: 0.9rem; font-weight: 700; color: #DC3545; margin: 0;">UGX {stats['total_balance']:,.0f}</p>
+                <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Total Balance</p>
+            </div>
+            """, unsafe_allow_html=True)
+
         with col3:
             if stats["collection_rate"] > 0:
                 st.progress(stats["collection_rate"] / 100)
-                st.caption(f"Collection Progress: {stats['collection_rate']:.0f}%")
+                st.caption(f"📊 Progress: {stats['collection_rate']:.0f}%")
 
         st.markdown("---")
         st.markdown("<h3 style='font-size: 1.1rem;'>Quick Actions</h3>", unsafe_allow_html=True)
@@ -1667,18 +1716,47 @@ def main_app():
                         total_due = effective_previous + term_fees
                         current_balance = max(0, total_due - total_paid_this_term - credit_amount)
 
-                        # Compact pupil info
                         col1, col2, col3, col4, col5 = st.columns(5)
+
                         with col1:
-                            st.metric("Name", pupil_name[:20] + "..." if len(pupil_name) > 20 else pupil_name)
+                            st.markdown(f"""
+                            <div style="background: #F8F9FA; border-radius: 10px; padding: 6px; text-align: center;">
+                                <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Name</p>
+                                <p style="font-size: 0.8rem; font-weight: 600; color: #1E3A5F; margin: 0; word-break: break-word;">{pupil_name[:18] + '...' if len(pupil_name) > 18 else pupil_name}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+
                         with col2:
-                            st.metric("Class", pupil_data['class'])
+                            st.markdown(f"""
+                            <div style="background: #F8F9FA; border-radius: 10px; padding: 6px; text-align: center;">
+                                <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Class</p>
+                                <p style="font-size: 0.8rem; font-weight: 600; color: #1E3A5F; margin: 0;">{pupil_data['class']}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+
                         with col3:
-                            st.metric("Type", pupil_type)
+                            st.markdown(f"""
+                            <div style="background: #F8F9FA; border-radius: 10px; padding: 6px; text-align: center;">
+                                <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Type</p>
+                                <p style="font-size: 0.8rem; font-weight: 600; color: #1E3A5F; margin: 0;">{pupil_type}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+
                         with col4:
-                            st.metric("Term Fees", f"UGX {term_fees:,.0f}")
+                            st.markdown(f"""
+                            <div style="background: #F8F9FA; border-radius: 10px; padding: 6px; text-align: center;">
+                                <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Term Fees</p>
+                                <p style="font-size: 0.75rem; font-weight: 700; color: #1E3A5F; margin: 0;">UGX {term_fees:,.0f}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+
                         with col5:
-                            st.metric("Due", f"UGX {current_balance:,.0f}")
+                            st.markdown(f"""
+                            <div style="background: #F8F9FA; border-radius: 10px; padding: 6px; text-align: center;">
+                                <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Due This Term</p>
+                                <p style="font-size: 0.75rem; font-weight: 700; color: {'#DC3545' if current_balance > 0 else '#28A745'}; margin: 0;">UGX {current_balance:,.0f}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
 
                         if credit_amount > 0:
                             st.success(f"✅ **Credit Available: UGX {credit_amount:,.0f}**")
