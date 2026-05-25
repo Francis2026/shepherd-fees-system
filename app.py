@@ -1,4 +1,25 @@
 import streamlit as st
+
+# ==================== PAGE CONFIGURATION (MUST BE ABSOLUTELY FIRST) ====================
+st.set_page_config(
+    page_title="Shepherd Academy | Fees Management",
+    layout="wide",
+    page_icon=":school:",
+    initial_sidebar_state="expanded"
+)
+
+# ========== CRITICAL: Initialize session state ONCE ==========
+if "app_initialized" not in st.session_state:
+    st.session_state.app_initialized = True
+    st.session_state.logged_in = False
+    st.session_state.firebase_done = False
+    st.session_state.login_loaded = False
+    st.session_state.navigation_menu = "Dashboard"
+    st.session_state.show_archived = False
+    st.session_state.username = ""
+    st.session_state.role = ""
+
+# THEN import all other libraries (AFTER page config)
 import firebase_admin
 from firebase_admin import credentials, firestore
 import pandas as pd
@@ -18,43 +39,7 @@ import time
 from datetime import timedelta
 import json
 
-# ==================== PAGE CONFIGURATION (MUST BE FIRST) ====================
-st.set_page_config(
-    page_title="Shepherd Academy | Fees Management",
-    layout="wide",
-    page_icon=":school:",
-    initial_sidebar_state="expanded"
-)
 
-# ========== CRITICAL: Initialize session state ONCE ==========
-if "app_initialized" not in st.session_state:
-    st.session_state.app_initialized = True
-    st.session_state.logged_in = False
-    st.session_state.firebase_done = False
-    st.session_state.login_loaded = False
-    st.session_state.navigation_menu = "Dashboard"
-    st.session_state.show_archived = False
-    st.session_state.username = ""
-    st.session_state.role = ""
-
-# ------------------- Modern Color Scheme -------------------
-COLORS = {
-    "primary": "#1E3A5F",
-    "secondary": "#2E5A8A",
-    "accent": "#4A90E2",
-    "success": "#28A745",
-    "warning": "#FFC107",
-    "danger": "#DC3545",
-    "dark": "#1A1A2E",
-    "light": "#F8F9FA",
-    "gray": "#6C757D",
-    "white": "#FFFFFF",
-    "staff": "#17A2B8",
-    "shepherd": "#20B2AA",
-    "community": "#6C757D"
-}
-
-# ------------------- Modern CSS -------------------
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -321,6 +306,23 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ------------------- Modern Color Scheme -------------------
+COLORS = {
+    "primary": "#1E3A5F",
+    "secondary": "#2E5A8A",
+    "accent": "#4A90E2",
+    "success": "#28A745",
+    "warning": "#FFC107",
+    "danger": "#DC3545",
+    "dark": "#1A1A2E",
+    "light": "#F8F9FA",
+    "gray": "#6C757D",
+    "white": "#FFFFFF",
+    "staff": "#17A2B8",
+    "shepherd": "#20B2AA",
+    "community": "#6C757D"
+}
+
 # ==================== ENHANCED CACHE SYSTEM ====================
 class SmartCache:
     """Enhanced cache with different TTLs for different data types"""
@@ -344,7 +346,6 @@ class SmartCache:
             if datetime.datetime.now() - timestamp < timedelta(seconds=ttl):
                 return data
             else:
-                # Expired, remove it
                 del self.cache[key]
         return None
 
@@ -357,7 +358,6 @@ class SmartCache:
         if key:
             self.cache.pop(key, None)
         elif data_type:
-            # Invalidate all keys of a certain type (by prefix)
             keys_to_remove = [k for k in self.cache if k.startswith(data_type)]
             for k in keys_to_remove:
                 self.cache.pop(k, None)
@@ -396,7 +396,6 @@ def init_firebase():
 
 
 db = init_firebase()
-
 
 # ==================== HELPER FUNCTIONS ====================
 def get_logo_base64():
