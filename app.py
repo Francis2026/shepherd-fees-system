@@ -18,6 +18,14 @@ import time
 from datetime import timedelta
 import json
 
+# ==================== PAGE CONFIGURATION (MUST BE FIRST) ====================
+st.set_page_config(
+    page_title="Shepherd Academy | Fees Management",
+    layout="wide",
+    page_icon=":school:",
+    initial_sidebar_state="expanded"
+)
+
 # ========== CRITICAL: Initialize session state ONCE ==========
 if "app_initialized" not in st.session_state:
     st.session_state.app_initialized = True
@@ -28,14 +36,6 @@ if "app_initialized" not in st.session_state:
     st.session_state.show_archived = False
     st.session_state.username = ""
     st.session_state.role = ""
-
-# ------------------- Page Configuration -------------------
-st.set_page_config(
-    page_title="Shepherd Academy | Fees Management",
-    layout="wide",
-    page_icon=":school:",
-    initial_sidebar_state="expanded"
-)
 
 # ------------------- Modern Color Scheme -------------------
 COLORS = {
@@ -320,7 +320,6 @@ st.markdown("""
     .stAppViewerBadge {display: none !important;}
 </style>
 """, unsafe_allow_html=True)
-
 
 # ==================== ENHANCED CACHE SYSTEM ====================
 class SmartCache:
