@@ -1028,46 +1028,19 @@ class FeesManager:
 # ==================== AUTHENTICATION ====================
 def authenticate_user(username, password):
     if supabase is None:
-        st.error("❌ Supabase not connected")
         return None
 
     try:
-        # Debug output
-        st.write("### 🔍 Authentication Debug")
-        st.write(f"Username entered: '{username}'")
-        st.write(f"Password entered: '{password}'")
-
-        # Query the database
         result = supabase.table("users").select("*").eq("username", username).execute()
-
-        st.write(f"Query returned: {len(result.data)} record(s)")
 
         if result.data:
             user_data = result.data[0]
             stored_password = user_data.get("password", "")
-            input_hashed = hash_password(password)
-
-            st.write(f"Stored password hash: {stored_password}")
-            st.write(f"Input password hash: {input_hashed}")
-            st.write(f"Hashes match: {stored_password == input_hashed}")
-
-            if stored_password == input_hashed:
-                st.success("✅ Authentication successful!")
+            if stored_password == hash_password(password):
                 return user_data.get("role", "admin")
-            else:
-                st.error("❌ Password hash mismatch")
-                # Show first few characters of each for comparison
-                st.write(f"Stored starts with: {stored_password[:20]}...")
-                st.write(f"Input starts with: {input_hashed[:20]}...")
-        else:
-            st.error(f"❌ User '{username}' not found in database")
-            # Show what users exist
-            all_users = supabase.table("users").select("username").execute()
-            st.write(f"Users in database: {[u['username'] for u in all_users.data]}")
-
         return None
     except Exception as e:
-        st.error(f"❌ Authentication error: {str(e)}")
+        st.error(f"Authentication error: {str(e)}")
         return None
 
 
@@ -1106,12 +1079,6 @@ def login_page():
             </div>
             """, unsafe_allow_html=True)
 
-        # Debug: Show connection status
-        if supabase:
-            st.success("✅ Supabase Connected")
-        else:
-            st.error("❌ Supabase NOT Connected")
-
         with st.form(key="login_form"):
             username = st.text_input("Username", placeholder="Enter your username")
             password = st.text_input("Password", type="password", placeholder="Enter your password")
@@ -1127,6 +1094,8 @@ def login_page():
                         st.session_state.username = username
                         st.session_state.role = role
                         st.rerun()
+                    else:
+                        st.error("Invalid username or password")
 
 
 # ==================== MAIN APP ====================
