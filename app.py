@@ -1421,6 +1421,10 @@ def main_app():
                 ledger_entries = manager.get_ledger(pupil_id, current_term, current_year)
                 total_paid_this_term = sum([p.get("amount", 0) for p in ledger_entries])
 
+                previous_balance = previous_balance if previous_balance is not None else 0
+                term_fees = term_fees if term_fees is not None else 0
+                total_paid_this_term = total_paid_this_term if total_paid_this_term is not None else 0
+
                 credit_amount = abs(previous_balance) if previous_balance < 0 else 0
                 effective_previous = max(0, previous_balance) if previous_balance > 0 else 0
 
@@ -1437,24 +1441,38 @@ def main_app():
                         source_term = f"Term 1, {current_year}"
                     else:
                         source_term = f"Term 2, {current_year}"
+
+                    # Ensure values are numbers (not None)
+                    credit_amt = credit_amount if credit_amount is not None else 0
+                    total_due_amt = total_due if total_due is not None else 0
+
                     all_transactions.append({
                         "S/No": 0,
                         "Date": f"Credit from {source_term}",
                         "Amount Paid": "UGX 0",
-                        "Credit Applied": f"UGX {credit_amount:,.0f}",
+                        "Credit Applied": f"UGX {credit_amt:,.0f}",
                         "Description": "Credit balance carried forward",
-                        "Balance After": f"UGX {max(0, total_due - credit_amount):,.0f}",
+                        "Balance After": f"UGX {max(0, total_due_amt - credit_amt):,.0f}",
                         "Receipt No": "N/A"
                     })
 
                 for idx, entry in enumerate(ledger_entries, 1):
+                    # Safely get values, ensuring they are numbers
+                    amount = entry.get('amount', 0)
+                    if amount is None:
+                        amount = 0
+
+                    balance = entry.get('balance', 0)
+                    if balance is None:
+                        balance = 0
+
                     all_transactions.append({
                         "S/No": idx,
-                        "Date": entry.get("payment_date", ""),
-                        "Amount Paid": f"UGX {entry.get('amount', 0):,.0f}",
+                        "Date": entry.get("payment_date", "")[:10] if entry.get("payment_date") else "",
+                        "Amount Paid": f"UGX {amount:,.0f}",
                         "Credit Applied": "UGX 0",
                         "Description": entry.get("description", "Payment"),
-                        "Balance After": f"UGX {entry.get('balance', 0):,.0f}",
+                        "Balance After": f"UGX {balance:,.0f}",
                         "Receipt No": entry.get("receipt_no", "")
                     })
 
