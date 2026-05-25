@@ -1357,19 +1357,47 @@ def main_app():
 
         st.markdown("---")
 
-        # Term Enrollment Section
+        st.markdown("### Navigation")
+
+        if role == "bursar":
+            nav_options = ["Dashboard", "Enroll Pupil", "Pupils & Ledgers", "Record Payment",
+                           "Class Reports", "School Reports", "Manage Pupils", "Archived Pupils"]
+        else:
+            nav_options = ["Dashboard", "Pupils & Ledgers", "Class Reports", "School Reports"]
+
+        selected_menu = st.radio(
+            "Menu",
+            nav_options,
+            key="nav_radio",
+            label_visibility="collapsed"
+        )
+
+        st.session_state.navigation_menu = selected_menu
+        menu = selected_menu
+
+        st.markdown("---")
+        st.markdown("### Period")
+        current_term = st.selectbox("Term", ["Term 1", "Term 2", "Term 3"], key="global_term")
+        current_year = st.number_input("Year", min_value=2020, max_value=2030, value=datetime.datetime.now().year, step=1)
+
+        st.markdown("---")
+
+        # Term Enrollment Section (MOVED HERE - AFTER current_term/current_year are defined)
         if role == "bursar":
             st.markdown("### 📋 Term Enrollment")
 
             # Determine previous term
-            term_order = ["Term 1", "Term 2", "Term 3"]
-            current_idx = term_order.index(current_term)
+            term_order_list = ["Term 1", "Term 2", "Term 3"]
+            try:
+                current_idx = term_order_list.index(current_term)
+            except:
+                current_idx = 0
 
             if current_idx == 0:  # Term 1
                 prev_term = "Term 3"
                 prev_year = current_year - 1
             else:
-                prev_term = term_order[current_idx - 1]
+                prev_term = term_order_list[current_idx - 1]
                 prev_year = current_year
 
             st.caption(f"Enroll pupils from {prev_term} {prev_year} into {current_term} {current_year}")
@@ -1383,7 +1411,7 @@ def main_app():
                 st.rerun()
             st.markdown("---")
 
-        # Show enrollment dialog if flag is set
+        # Show enrollment dialog if flag is set (ALSO MOVED HERE)
         if st.session_state.get("show_enrollment_dialog", False):
             with st.expander("📋 Enroll Pupils", expanded=True):
                 # Get pupils from previous term
@@ -1426,29 +1454,17 @@ def main_app():
                         st.session_state.show_enrollment_dialog = False
                         st.rerun()
 
-        st.markdown("### Navigation")
+        if role == "bursar" and menu in ["Pupils & Ledgers", "Class Reports", "School Reports"]:
+            show_archived = st.checkbox("Show Archived Pupils", value=st.session_state.show_archived,
+                                        key="show_archived_checkbox")
+            st.session_state.show_archived = show_archived
 
-        if role == "bursar":
-            nav_options = ["Dashboard", "Enroll Pupil", "Pupils & Ledgers", "Record Payment",
-                           "Class Reports", "School Reports", "Manage Pupils", "Archived Pupils"]
-        else:
-            nav_options = ["Dashboard", "Pupils & Ledgers", "Class Reports", "School Reports"]
-
-        selected_menu = st.radio(
-            "Menu",
-            nav_options,
-            key="nav_radio",
-            label_visibility="collapsed"
-        )
-
-        st.session_state.navigation_menu = selected_menu
-        menu = selected_menu
-
-        st.markdown("---")
-        st.markdown("### Period")
-        current_term = st.selectbox("Term", ["Term 1", "Term 2", "Term 3"], key="global_term")
-        current_year = st.number_input("Year", min_value=2020, max_value=2030, value=datetime.datetime.now().year,
-                                       step=1)
+        if st.button("🚪 Logout", key="logout_btn", use_container_width=True):
+            for key in ["logged_in", "username", "role", "navigation_menu", "show_archived"]:
+                if key in st.session_state:
+                    del st.session_state[key]
+            cache.clear_all()
+            st.rerun()
 
         st.markdown("---")
 
