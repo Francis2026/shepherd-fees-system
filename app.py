@@ -634,33 +634,25 @@ class FeesManager:
         return [p for p in all_pupils if p.get("class") == class_name]
 
     def get_pupils_for_term(self, class_name, term, year, include_archived=False):
-        """Only show pupils who were enrolled by or before this term"""
+        """Only show pupils who are ENROLLED in this specific term"""
         all_pupils = self.get_pupils_by_class(class_name, include_archived)
-        term_order = self.term_order
-        current_order = term_order.get(term, 1)
+        term_key = f"{year}_{term}"
 
         filtered = []
         for pupil in all_pupils:
             if pupil.get("archived", False) and not include_archived:
                 continue
 
-            enrollment_term = pupil.get("enrollment_term", "Term 1")
-            enrollment_year = pupil.get("enrollment_year", year)
-            enrollment_order = term_order.get(enrollment_term, 1)
+            # Check if pupil is enrolled in this term
+            enrollments = pupil.get("term_enrollments", {})
+            is_enrolled = enrollments.get(term_key, {}).get("active", False)
 
-            # Check if pupil was enrolled by this term
-            if enrollment_year < year:
-                filtered.append(pupil)
-            elif enrollment_year == year and enrollment_order <= current_order:
-                filtered.append(pupil)
-            elif pupil.get("active", True) and not pupil.get("archived", False):
-                active_since_term = pupil.get("active_since_term", enrollment_term)
-                active_since_year = pupil.get("active_since_year", enrollment_year)
-                active_order = term_order.get(active_since_term, 1)
+            # Also check if this is the enrollment term (for newly enrolled pupils)
+            is_initial_enrollment = (pupil.get("enrollment_term") == term and
+                                     pupil.get("enrollment_year") == year)
 
-                if active_since_year < year:
-                    filtered.append(pupil)
-                elif active_since_year == year and active_order <= current_order:
+            if is_enrolled or is_initial_enrollment:
+                if pupil.get("class") == class_name or class_name == "All Classes":
                     filtered.append(pupil)
 
         return filtered
@@ -733,6 +725,17 @@ class FeesManager:
                 is_sponsored = False
                 sponsor_reason = ""
 
+            term_key = f"{current_year}_{current_term}"
+            term_enrollments = {
+                term_key: {
+                    "active": True,
+                    "class": class_name,
+                    "enrolled_at": datetime.datetime.now().isoformat(),
+                    "term_fees": term_fees,
+                    "pupil_type": pupil_type
+                }
+            }
+
             pupil_ref.set({
                 "name": name,
                 "class": class_name,
@@ -750,7 +753,8 @@ class FeesManager:
                 "current_term": current_term,
                 "current_year": current_year,
                 "active_since_term": current_term,
-                "active_since_year": current_year
+                "active_since_year": current_year,
+                "term_enrollments": term_enrollments
             })
 
             # Invalidate caches
@@ -859,6 +863,18 @@ class FeesManager:
             if not pupil_data:
                 return False
 
+            term_key = f"{return_year}_{return_term}"
+            enrollments = pupil_data.get("term_enrollments", {})
+
+            enrollments[term_key] = {
+                "active": True,
+                "class": pupil_data.get("class"),
+                "enrolled_at": datetime.datetime.now().isoformat(),
+                "term_fees": pupil_data.get("term_fees", 0),
+                "pupil_type": pupil_data.get("pupil_type", "Community Child"),
+                "restored": True
+            }
+
             db.collection("pupils").document(pupil_id).update({
                 "active": True,
                 "archived": False,
@@ -868,7 +884,8 @@ class FeesManager:
                 "active_since_term": return_term,
                 "active_since_year": return_year,
                 "current_term": return_term,
-                "current_year": return_year
+                "current_year": return_year,
+                "term_enrollments": enrollments
             })
 
             cache.invalidate(data_type="pupils")
@@ -878,52 +895,51 @@ class FeesManager:
             st.error(f"Error restoring pupil: {str(e)}")
             return False
 
-    def advance_to_next_term(self, current_term, current_year):
-        """Advance all active pupils to the next term"""
-        term_order = TERM_ORDER
-        current_index = term_order.index(current_term)
+    # ==================== NEW TERM ENROLLMENT METHODS ====================
 
-        if current_index == 2:  # Term 3
-            next_term = "Term 1"
-            next_year = current_year + 1
-            promote_class = True
-        else:
-            next_term = term_order[current_index + 1]
-            next_year = current_year
-            promote_class = False
+    def enroll_pupil_into_term(self, pupil_id, term, year):
+        """Enroll a pupil into a specific term"""
+        try:
+            pupil_data = self.get_pupil_details(pupil_id)
+            if not pupil_data:
+                return False
 
-        all_pupils = self.get_all_pupils(include_archived=False)
-        promoted_count = 0
-        completed_count = 0
+            term_key = f"{year}_{term}"
+            enrollments = pupil_data.get("term_enrollments", {})
 
-        for pupil in all_pupils:
-            pupil_id = pupil.get('id')
-            current_class = pupil.get('class')
+            enrollments[term_key] = {
+                "active": True,
+                "class": pupil_data.get("class"),
+                "enrolled_at": datetime.datetime.now().isoformat(),
+                "term_fees": pupil_data.get("term_fees", 0),
+                "pupil_type": pupil_data.get("pupil_type", "Community Child")
+            }
 
-            if promote_class:
-                next_class = self.get_next_class(current_class)
-                if next_class is None:
-                    # Pupil completed P7 - auto archive
-                    self.archive_pupil(pupil_id, "Completed Primary Education")
-                    completed_count += 1
-                    continue
-                elif next_class != current_class:
-                    self.update_pupil_class(pupil_id, next_class)
-                    promoted_count += 1
+            db.collection("pupils").document(pupil_id).update({
+                "term_enrollments": enrollments,
+                "current_term": term,
+                "current_year": year,
+                f"enrolled_in_{term}_{year}": True
+            })
 
-            # Update current term tracking
-            self.update_pupil_term_status(pupil_id, next_term, next_year)
+            cache.invalidate(data_type="pupils")
+            cache.invalidate(f"pupil_{pupil_id}")
+            return True
+        except Exception as e:
+            st.error(f"Error enrolling pupil into term: {str(e)}")
+            return False
 
-        # Invalidate all caches after mass update
-        cache.clear_all()
+    def is_enrolled_in_term(self, pupil_id, term, year):
+        """Check if pupil is enrolled in a specific term"""
+        pupil_data = self.get_pupil_details(pupil_id)
+        if not pupil_data:
+            return False
 
-        result_msg = f"✅ Advanced to {next_term} {next_year}"
-        if promoted_count > 0:
-            result_msg += f"\n📚 Promoted {promoted_count} pupils to next class"
-        if completed_count > 0:
-            result_msg += f"\n🎓 {completed_count} pupils completed P7 and were archived"
+        term_key = f"{year}_{term}"
+        enrollments = pupil_data.get("term_enrollments", {})
+        return enrollments.get(term_key, {}).get("active", False)
 
-        return result_msg
+    # ==================== END NEW METHODS ====================
 
     def add_payment(self, pupil_id, term, year, amount, description):
         """Add a payment with excess handling (excess carries forward as credit)"""
@@ -1341,17 +1357,74 @@ def main_app():
 
         st.markdown("---")
 
-        # Term Progression Button
+        # Term Enrollment Section
         if role == "bursar":
-            st.markdown("### 📅 Term Management")
-            if st.button("➡️ Advance to Next Term", use_container_width=True, key="advance_term_btn"):
-                with st.spinner("Advancing pupils to next term..."):
-                    manager = FeesManager()
-                    result = manager.advance_to_next_term(current_term, current_year)
-                    st.success(result)
-                    time.sleep(2)
-                    st.rerun()
+            st.markdown("### 📋 Term Enrollment")
+
+            # Determine previous term
+            term_order = ["Term 1", "Term 2", "Term 3"]
+            current_idx = term_order.index(current_term)
+
+            if current_idx == 0:  # Term 1
+                prev_term = "Term 3"
+                prev_year = current_year - 1
+            else:
+                prev_term = term_order[current_idx - 1]
+                prev_year = current_year
+
+            st.caption(f"Enroll pupils from {prev_term} {prev_year} into {current_term} {current_year}")
+
+            if st.button("📝 Enroll Previous Term Pupils", use_container_width=True, key="enroll_prev_btn"):
+                st.session_state.show_enrollment_dialog = True
+                st.session_state.enroll_from_term = prev_term
+                st.session_state.enroll_from_year = prev_year
+                st.session_state.enroll_to_term = current_term
+                st.session_state.enroll_to_year = current_year
+                st.rerun()
             st.markdown("---")
+
+        # Show enrollment dialog if flag is set
+        if st.session_state.get("show_enrollment_dialog", False):
+            with st.expander("📋 Enroll Pupils", expanded=True):
+                # Get pupils from previous term
+                prev_pupils = manager.get_pupils_for_term("All Classes",
+                                                          st.session_state.enroll_from_term,
+                                                          st.session_state.enroll_from_year,
+                                                          include_archived=False)
+
+                st.subheader(
+                    f"Enroll from {st.session_state.enroll_from_term} {st.session_state.enroll_from_year} to {st.session_state.enroll_to_term} {st.session_state.enroll_to_year}")
+
+                selected_pupils = []
+                for pupil in prev_pupils:
+                    # Check if already enrolled in current term
+                    term_key = f"{st.session_state.enroll_to_year}_{st.session_state.enroll_to_term}"
+                    enrollments = pupil.get("term_enrollments", {})
+                    already_enrolled = enrollments.get(term_key, {}).get("active", False)
+
+                    if already_enrolled:
+                        st.info(f"✅ {pupil['name']} ({pupil['class']}) - Already enrolled")
+                    else:
+                        if st.checkbox(f"Enroll {pupil['name']} ({pupil['class']})", key=f"enroll_{pupil['id']}"):
+                            selected_pupils.append(pupil)
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button(f"Enroll Selected ({len(selected_pupils)} pupils)", use_container_width=True):
+                        for pupil in selected_pupils:
+                            manager.enroll_pupil_into_term(pupil['id'],
+                                                           st.session_state.enroll_to_term,
+                                                           st.session_state.enroll_to_year)
+                        st.success(
+                            f"✅ Enrolled {len(selected_pupils)} pupils into {st.session_state.enroll_to_term} {st.session_state.enroll_to_year}")
+                        st.session_state.show_enrollment_dialog = False
+                        cache.clear_all()
+                        time.sleep(1)
+                        st.rerun()
+                with col2:
+                    if st.button("Cancel", use_container_width=True):
+                        st.session_state.show_enrollment_dialog = False
+                        st.rerun()
 
         st.markdown("### Navigation")
 
