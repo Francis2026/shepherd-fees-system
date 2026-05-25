@@ -1834,14 +1834,12 @@ def main_app():
             else:
                 df_to_show = df_all
 
-            if filter_status == "Cleared":
-                if not df_to_show.empty:
+            if not df_to_show.empty and filter_status != "All":
+                if filter_status == "Cleared":
                     df_to_show = df_to_show[df_to_show["Status"] == "Cleared"]
-            elif filter_status == "Not Cleared":
-                if not df_to_show.empty:
+                elif filter_status == "Not Cleared":
                     df_to_show = df_to_show[df_to_show["Status"] == "Not Cleared"]
-            elif filter_status == "Archived":
-                if not df_to_show.empty:
+                elif filter_status == "Archived":
                     df_to_show = df_to_show[df_to_show["Status"] == "Archived (Left School)"]
 
             if not df_to_show.empty:
@@ -1857,23 +1855,22 @@ def main_app():
                     div[data-testid="stMetric"] {
                         background-color: #f8f9fa;
                         border-radius: 10px;
-                        padding: 8px;
+                        padding: 6px;
                         text-align: center;
                     }
                     div[data-testid="stMetric"] label {
-                        font-size: 0.7rem !important;
+                        font-size: 0.65rem !important;
                         color: #6c757d !important;
                     }
                     div[data-testid="stMetric"] div {
-                        font-size: 0.9rem !important;
+                        font-size: 0.85rem !important;
                         font-weight: 600 !important;
                     }
                 </style>
                 """, unsafe_allow_html=True)
 
                 # Filter out archived for financial stats
-                financial_df = df_to_show[
-                    df_to_show["Status"] != "Archived (Left School)"] if not df_to_show.empty else pd.DataFrame()
+                financial_df = df_to_show[df_to_show["Status"] != "Archived (Left School)"].copy() if not df_to_show.empty else pd.DataFrame()
 
                 if not financial_df.empty:
                     # Calculate totals
@@ -1911,106 +1908,100 @@ def main_app():
                     # ========== PERFORMANCE BY CLASS ==========
                     st.markdown("### 🏫 Performance by Class")
 
-                    if "Class" in financial_df.columns:
-                        # Build class summary manually
-                        class_summary_data = []
-                        for class_name in financial_df["Class"].unique():
-                            class_df = financial_df[financial_df["Class"] == class_name]
-                            class_summary_data.append({
-                                "Class": class_name,
-                                "Pupils": len(class_df),
-                                "Expected": class_df["Term Fees (UGX)"].sum(),
-                                "Collected": class_df["Total Paid (UGX)"].sum(),
-                                "Balance": class_df["Balance (UGX)"].sum()
-                            })
+                    # Build class summary manually
+                    class_summary_list = []
+                    for class_name in financial_df["Class"].unique():
+                        class_data = financial_df[financial_df["Class"] == class_name]
+                        class_summary_list.append({
+                            "Class": class_name,
+                            "Pupils": len(class_data),
+                            "Expected": class_data["Term Fees (UGX)"].sum(),
+                            "Collected": class_data["Total Paid (UGX)"].sum(),
+                            "Balance": class_data["Balance (UGX)"].sum()
+                        })
 
-                        class_df_summary = pd.DataFrame(class_summary_data)
-                        if not class_df_summary.empty:
-                            class_df_summary["Rate"] = (
-                                        class_df_summary["Collected"] / class_df_summary["Expected"] * 100).fillna(
-                                0).round(1)
-                            class_df_summary = class_df_summary.sort_values("Class")
+                    if class_summary_list:
+                        class_summary_df = pd.DataFrame(class_summary_list)
+                        class_summary_df["Rate"] = (class_summary_df["Collected"] / class_summary_df["Expected"] * 100).fillna(0).round(1)
+                        class_summary_df = class_summary_df.sort_values("Class")
 
-                            st.dataframe(
-                                class_df_summary.style.format({
-                                    "Expected": "UGX {:,.0f}",
-                                    "Collected": "UGX {:,.0f}",
-                                    "Balance": "UGX {:,.0f}",
-                                    "Rate": "{:.1f}%"
-                                }),
-                                use_container_width=True
+                        st.dataframe(
+                            class_summary_df.style.format({
+                                "Expected": "UGX {:,.0f}",
+                                "Collected": "UGX {:,.0f}",
+                                "Balance": "UGX {:,.0f}",
+                                "Rate": "{:.1f}%"
+                            }),
+                            use_container_width=True
+                        )
+
+                        if len(class_summary_df) > 1:
+                            fig = px.bar(
+                                class_summary_df,
+                                x="Class",
+                                y="Rate",
+                                title="Collection Rate by Class",
+                                color="Rate",
+                                color_continuous_scale="RdYlGn",
+                                text="Rate"
                             )
-
-                            if len(class_df_summary) > 1:
-                                fig = px.bar(
-                                    class_df_summary,
-                                    x="Class",
-                                    y="Rate",
-                                    title="Collection Rate by Class",
-                                    color="Rate",
-                                    color_continuous_scale="RdYlGn",
-                                    text="Rate"
-                                )
-                                fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-                                fig.update_layout(plot_bgcolor='white', paper_bgcolor='white', height=400)
-                                st.plotly_chart(fig, use_container_width=True)
+                            fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+                            fig.update_layout(plot_bgcolor='white', paper_bgcolor='white', height=400)
+                            st.plotly_chart(fig, use_container_width=True)
 
                     st.markdown("---")
 
                     # ========== PERFORMANCE BY CATEGORY ==========
                     st.markdown("### 👥 Performance by Pupil Category")
 
-                    if "Pupil Type" in financial_df.columns:
-                        # Build category summary manually
-                        category_summary_data = []
-                        for cat_type in financial_df["Pupil Type"].unique():
-                            cat_df = financial_df[financial_df["Pupil Type"] == cat_type]
-                            category_summary_data.append({
-                                "Category": cat_type,
-                                "Pupils": len(cat_df),
-                                "Expected": cat_df["Term Fees (UGX)"].sum(),
-                                "Collected": cat_df["Total Paid (UGX)"].sum(),
-                                "Balance": cat_df["Balance (UGX)"].sum()
-                            })
+                    # Build category summary manually
+                    category_summary_list = []
+                    for cat_type in financial_df["Pupil Type"].unique():
+                        cat_data = financial_df[financial_df["Pupil Type"] == cat_type]
+                        category_summary_list.append({
+                            "Category": cat_type,
+                            "Pupils": len(cat_data),
+                            "Expected": cat_data["Term Fees (UGX)"].sum(),
+                            "Collected": cat_data["Total Paid (UGX)"].sum(),
+                            "Balance": cat_data["Balance (UGX)"].sum()
+                        })
 
-                        category_df_summary = pd.DataFrame(category_summary_data)
-                        if not category_df_summary.empty:
-                            category_df_summary["Rate"] = (category_df_summary["Collected"] / category_df_summary[
-                                "Expected"] * 100).fillna(0).round(1)
+                    if category_summary_list:
+                        category_summary_df = pd.DataFrame(category_summary_list)
+                        category_summary_df["Rate"] = (category_summary_df["Collected"] / category_summary_df["Expected"] * 100).fillna(0).round(1)
 
-                            # Display in columns
-                            cat_cols = st.columns(len(category_df_summary))
-                            for idx, row in category_df_summary.iterrows():
-                                with cat_cols[idx]:
-                                    st.markdown(f"""
-                                    <div style="background: #f8f9fa; border-radius: 10px; padding: 10px; text-align: center;">
-                                        <p style="font-weight: 700; margin: 0; font-size: 0.8rem;">{row['Category']}</p>
-                                        <p style="margin: 3px 0; font-size: 0.7rem;">👥 {int(row['Pupils'])}</p>
-                                        <p style="margin: 3px 0; font-size: 0.65rem;">💰 UGX {row['Expected']:,.0f}</p>
-                                        <p style="margin: 3px 0; font-size: 0.65rem;">✅ UGX {row['Collected']:,.0f}</p>
-                                        <p style="margin: 3px 0; font-size: 0.65rem;">⚠️ UGX {row['Balance']:,.0f}</p>
-                                        <p style="margin: 3px 0; font-size: 0.7rem; font-weight: 700;">📊 {row['Rate']:.1f}%</p>
-                                    </div>
-                                    """, unsafe_allow_html=True)
+                        # Display in columns
+                        cat_cols = st.columns(len(category_summary_df))
+                        for idx, row in category_summary_df.iterrows():
+                            with cat_cols[idx]:
+                                st.markdown(f"""
+                                <div style="background: #f8f9fa; border-radius: 10px; padding: 8px; text-align: center;">
+                                    <p style="font-weight: 700; margin: 0; font-size: 0.75rem;">{row['Category']}</p>
+                                    <p style="margin: 2px 0; font-size: 0.65rem;">👥 {int(row['Pupils'])}</p>
+                                    <p style="margin: 2px 0; font-size: 0.6rem;">💰 UGX {row['Expected']:,.0f}</p>
+                                    <p style="margin: 2px 0; font-size: 0.6rem;">✅ UGX {row['Collected']:,.0f}</p>
+                                    <p style="margin: 2px 0; font-size: 0.6rem;">⚠️ UGX {row['Balance']:,.0f}</p>
+                                    <p style="margin: 2px 0; font-size: 0.65rem; font-weight: 700;">📊 {row['Rate']:.1f}%</p>
+                                </div>
+                                """, unsafe_allow_html=True)
 
-                            # Pie chart
-                            fig2 = px.pie(
-                                category_df_summary,
-                                values="Pupils",
-                                names="Category",
-                                title="Pupil Distribution by Category",
-                                color_discrete_sequence=px.colors.qualitative.Set2
-                            )
-                            fig2.update_layout(plot_bgcolor='white', paper_bgcolor='white', height=350)
-                            st.plotly_chart(fig2, use_container_width=True)
+                        # Pie chart
+                        fig2 = px.pie(
+                            category_summary_df,
+                            values="Pupils",
+                            names="Category",
+                            title="Pupil Distribution by Category",
+                            color_discrete_sequence=px.colors.qualitative.Set2
+                        )
+                        fig2.update_layout(plot_bgcolor='white', paper_bgcolor='white', height=350)
+                        st.plotly_chart(fig2, use_container_width=True)
 
                     st.markdown("---")
 
                     # ========== TOP PERFORMING CLASSES ==========
-                    if "Class" in financial_df.columns and len(class_df_summary) > 0:
+                    if class_summary_list:
                         st.markdown("### 🏆 Top 5 Performing Classes")
-                        top_classes = class_df_summary.nlargest(5, "Rate")[
-                            ["Class", "Pupils", "Expected", "Collected", "Rate"]]
+                        top_classes = class_summary_df.nlargest(5, "Rate")[["Class", "Pupils", "Expected", "Collected", "Rate"]]
                         st.dataframe(
                             top_classes.style.format({
                                 "Expected": "UGX {:,.0f}",
