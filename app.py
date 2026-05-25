@@ -1469,17 +1469,7 @@ def main_app():
 
         st.markdown("---")
 
-        if role == "bursar" and menu in ["Pupils & Ledgers", "Class Reports", "School Reports"]:
-            show_archived = st.checkbox("Show Archived Pupils", value=st.session_state.show_archived,
-                                        key="show_archived_checkbox")
-            st.session_state.show_archived = show_archived
 
-        if st.button("🚪 Logout", key="logout_btn", use_container_width=True):
-            for key in ["logged_in", "username", "role", "navigation_menu", "show_archived"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-            cache.clear_all()
-            st.rerun()
 
     manager = FeesManager()
 
