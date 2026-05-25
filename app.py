@@ -15,11 +15,9 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 import os
 import base64
 import time
-import sqlite3
-import json
-from pathlib import Path
 from functools import lru_cache
-import threading
+from datetime import timedelta
+import json
 
 # ========== CRITICAL: Initialize session state ONCE ==========
 if "app_initialized" not in st.session_state:
@@ -31,7 +29,6 @@ if "app_initialized" not in st.session_state:
     st.session_state.show_archived = False
     st.session_state.username = ""
     st.session_state.role = ""
-    st.session_state.offline_mode = False
 
 # ------------------- Page Configuration -------------------
 st.set_page_config(
@@ -52,55 +49,324 @@ COLORS = {
     "dark": "#1A1A2E",
     "light": "#F8F9FA",
     "gray": "#6C757D",
-    "white": "#FFFFFF"
+    "white": "#FFFFFF",
+    "staff": "#17A2B8",
+    "shepherd": "#20B2AA",
+    "community": "#6C757D"
 }
 
 # ------------------- Modern CSS -------------------
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    * { font-family: 'Inter', sans-serif; }
-    .main .block-container { padding-top: 0rem !important; padding-bottom: 2rem; margin-top: 0rem !important; }
-    header { background: transparent !important; padding: 0rem !important; height: 0rem !important; min-height: 0rem !important; }
-    header .stDecoration { display: none !important; }
-    [data-testid="stSidebarCollapseButton"] { display: flex !important; background-color: #1E3A5F !important; border-radius: 0 8px 8px 0 !important; padding: 8px 10px !important; margin-top: 20px !important; }
-    [data-testid="stSidebarCollapseButton"] svg { fill: white !important; }
-    .stApp { margin-top: 0rem; padding-top: 0rem; }
-    .main > div:first-child { padding-top: 0rem !important; margin-top: 0rem !important; }
+
+    * {
+        font-family: 'Inter', sans-serif;
+    }
+
+    /* Remove top white space and padding */
+    .main .block-container {
+        padding-top: 0rem !important;
+        padding-bottom: 2rem;
+        margin-top: 0rem !important;
+    }
+
+    /* Style header instead of hiding - make it transparent/small */
+    header {
+        background: transparent !important;
+        padding: 0rem !important;
+        height: 0rem !important;
+        min-height: 0rem !important;
+    }
+
+    /* Hide the default Streamlit header content but keep sidebar button */
+    header .stDecoration {
+        display: none !important;
+    }
+
+    /* Ensure sidebar toggle button is visible and accessible */
+    [data-testid="stSidebarCollapseButton"] {
+        display: flex !important;
+        background-color: #1E3A5F !important;
+        border-radius: 0 8px 8px 0 !important;
+        padding: 8px 10px !important;
+        margin-top: 20px !important;
+    }
+
+    [data-testid="stSidebarCollapseButton"] svg {
+        fill: white !important;
+    }
+
+    /* Remove extra space from top of app */
+    .stApp {
+        margin-top: 0rem;
+        padding-top: 0rem;
+    }
+
+    /* Remove spacing from first element in main content */
+    .main > div:first-child {
+        padding-top: 0rem !important;
+        margin-top: 0rem !important;
+    }
+
+    /* Hide default Streamlit menu but keep sidebar button */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    section.main > div { padding-top: 0rem !important; }
-    .modern-card { background: white; border-radius: 20px; padding: 1.5rem; box-shadow: 0 10px 40px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; border: 1px solid rgba(0,0,0,0.05); }
-    .modern-card:hover { transform: translateY(-3px); box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
-    .stButton > button { background: linear-gradient(135deg, #1E3A5F 0%, #2E5A8A 100%); color: white; border-radius: 12px; border: none; padding: 0.7rem 1.5rem; font-weight: 600; transition: all 0.3s ease; width: 100%; font-size: 0.9rem; }
-    .stButton > button:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(30,58,95,0.3); }
-    [data-testid="stSidebar"] { background: linear-gradient(180deg, #1A1A2E 0%, #16213E 100%); border-right: none; }
-    [data-testid="stSidebar"] * { color: #E8E8E8 !important; }
-    [data-testid="stSidebar"] .stSelectbox label, [data-testid="stSidebar"] .stNumberInput label { color: #FFFFFF !important; font-weight: 600 !important; font-size: 14px !important; margin-bottom: 5px !important; display: block !important; }
-    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] div, [data-testid="stSidebar"] .stNumberInput input { color: #1A1A2E !important; background-color: #FFFFFF !important; }
-    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] h4 { color: #A8B56C !important; }
-    .stTextInput input, .stNumberInput input, .stSelectbox select, .stTextArea textarea { border-radius: 12px; border: 2px solid #E5E7EB; padding: 0.6rem 1rem; }
-    .dataframe { border-radius: 16px !important; overflow: hidden; }
-    .dataframe thead tr th { background: linear-gradient(135deg, #1E3A5F 0%, #2E5A8A 100%) !important; color: white !important; padding: 12px !important; }
-    .streamlit-expanderHeader { background: #F8F9FA; border-radius: 12px; font-weight: 600; }
-    .badge-success { background: #28A745; color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
-    .badge-warning { background: #FFC107; color: #333; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
-    .badge-info { background: #17A2B8; color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
-    .badge-secondary { background: #6C757D; color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
-    [data-testid="stSidebar"] .stRadio label { color: #E8E8E8 !important; }
-    [data-testid="stSidebar"] hr { border-color: #2E5A8A !important; }
-    .stButton > button:focus { outline: none !important; box-shadow: none !important; }
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: #F1F1F1; border-radius: 10px; }
-    ::-webkit-scrollbar-thumb { background: #1E3A5F; border-radius: 10px; }
-    ::-webkit-scrollbar-thumb:hover { background: #2E5A8A; }
-    .main-header { display: flex; justify-content: flex-end; align-items: center; padding: 10px 20px; background: white; border-radius: 0 0 0 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; position: sticky; top: 0; z-index: 999; }
-    .header-content { display: flex; align-items: center; gap: 15px; }
-    .header-logo { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid #A8B56C; }
-    .header-text { text-align: right; }
-    .header-title { font-size: 1.1rem; font-weight: 700; color: #1E3A5F; margin: 0; }
-    .header-subtitle { font-size: 0.7rem; color: #6C757D; margin: 0; }
-    .main .block-container { padding-top: 0rem !important; }
+
+    /* Remove top padding from the main area */
+    section.main > div {
+        padding-top: 0rem !important;
+    }
+
+    .modern-card {
+        background: white;
+        border-radius: 20px;
+        padding: 1.5rem;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.05);
+        transition: transform 0.2s, box-shadow 0.2s;
+        border: 1px solid rgba(0,0,0,0.05);
+    }
+    .modern-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    }
+
+    .stButton > button {
+        background: linear-gradient(135deg, #1E3A5F 0%, #2E5A8A 100%);
+        color: white;
+        border-radius: 12px;
+        border: none;
+        padding: 0.7rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        width: 100%;
+        font-size: 0.9rem;
+    }
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(30,58,95,0.3);
+    }
+
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1A1A2E 0%, #16213E 100%);
+        border-right: none;
+    }
+
+    [data-testid="stSidebar"] * {
+        color: #E8E8E8 !important;
+    }
+
+    /* Fix for selectbox labels in sidebar */
+    [data-testid="stSidebar"] .stSelectbox label {
+        color: #FFFFFF !important;
+        font-weight: 600 !important;
+        font-size: 14px !important;
+        margin-bottom: 5px !important;
+        display: block !important;
+    }
+
+    /* Fix for number input labels in sidebar */
+    [data-testid="stSidebar"] .stNumberInput label {
+        color: #FFFFFF !important;
+        font-weight: 600 !important;
+        font-size: 14px !important;
+        margin-bottom: 5px !important;
+        display: block !important;
+    }
+
+    /* Fix for selectbox selected value text */
+    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] div {
+        color: #1A1A2E !important;
+        background-color: #FFFFFF !important;
+    }
+
+    /* Fix for number input value */
+    [data-testid="stSidebar"] .stNumberInput input {
+        color: #1A1A2E !important;
+        background-color: #FFFFFF !important;
+    }
+
+    /* Sidebar headers */
+    [data-testid="stSidebar"] h1, 
+    [data-testid="stSidebar"] h2, 
+    [data-testid="stSidebar"] h3, 
+    [data-testid="stSidebar"] h4 {
+        color: #A8B56C !important;
+    }
+
+    /* Sidebar markdown text */
+    [data-testid="stSidebar"] .stMarkdown {
+        color: #E8E8E8 !important;
+    }
+
+    .stTextInput input, .stNumberInput input, .stSelectbox select, .stTextArea textarea {
+        border-radius: 12px;
+        border: 2px solid #E5E7EB;
+        padding: 0.6rem 1rem;
+    }
+
+    .dataframe {
+        border-radius: 16px !important;
+        overflow: hidden;
+    }
+    .dataframe thead tr th {
+        background: linear-gradient(135deg, #1E3A5F 0%, #2E5A8A 100%) !important;
+        color: white !important;
+        padding: 12px !important;
+    }
+
+    .streamlit-expanderHeader {
+        background: #F8F9FA;
+        border-radius: 12px;
+        font-weight: 600;
+    }
+
+    .badge-success {
+        background: #28A745;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .badge-warning {
+        background: #FFC107;
+        color: #333;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .badge-info {
+        background: #17A2B8;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .badge-secondary {
+        background: #6C757D;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .badge-staff {
+        background: #17A2B8;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .badge-shepherd {
+        background: #20B2AA;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .badge-community {
+        background: #6C757D;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    /* Additional fix for sidebar radio buttons */
+    [data-testid="stSidebar"] .stRadio label {
+        color: #E8E8E8 !important;
+    }
+
+    /* Fix for sidebar divider */
+    [data-testid="stSidebar"] hr {
+        border-color: #2E5A8A !important;
+    }
+
+    /* Remove blue box when clicking on elements */
+    .stButton > button:focus {
+        outline: none !important;
+        box-shadow: none !important;
+    }
+
+    /* Better scrollbar styling */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: #F1F1F1;
+        border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: #1E3A5F;
+        border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: #2E5A8A;
+    }
+
+    /* Top header with logo and title on the right */
+    .main-header {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        padding: 10px 20px;
+        background: white;
+        border-radius: 0 0 0 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        margin-bottom: 20px;
+        position: sticky;
+        top: 0;
+        z-index: 999;
+    }
+
+    .header-content {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .header-logo {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid #A8B56C;
+    }
+
+    .header-text {
+        text-align: right;
+    }
+
+    .header-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #1E3A5F;
+        margin: 0;
+    }
+
+    .header-subtitle {
+        font-size: 0.7rem;
+        color: #6C757D;
+        margin: 0;
+    }
+
+    /* Adjust main content to account for header */
+    .main .block-container {
+        padding-top: 0rem !important;
+    }
+
+    /* REMOVE STREAMLIT BRANDING */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .stAppDeployButton {display: none;}
@@ -112,346 +378,68 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ==================== FLASH DISK DATABASE ====================
+# ==================== SIMPLE CACHE (NO PICKLE ERRORS) ====================
+class SimpleCache:
+    """Simple in-memory cache to reduce Firebase queries - no pickling issues"""
 
-class FlashDiskDB:
-    """SQLite database on flash disk with automatic Firebase sync"""
+    def __init__(self, ttl_minutes=20):
+        self.cache = {}
+        self.ttl = timedelta(minutes=ttl_minutes)
 
-    def __init__(self):
-        self.db_path = self._detect_flash_disk()
-        self._init_database()
-        self._pending_syncs = []
+    def get(self, key):
+        """Get cached data if not expired"""
+        if key in self.cache:
+            data, timestamp = self.cache[key]
+            if datetime.datetime.now() - timestamp < self.ttl:
+                return data
+        return None
 
-    def _detect_flash_disk(self):
-        """Auto-detect flash disk or use default location"""
-        # Check common flash disk drive letters (Windows)
-        possible_drives = ["D:", "E:", "F:", "G:", "H:", "I:", "J:", "K:"]
+    def set(self, key, data):
+        """Store data in cache"""
+        self.cache[key] = (data, datetime.datetime.now())
 
-        for drive in possible_drives:
-            if os.path.exists(drive):
-                flash_folder = f"{drive}/ShepherdAcademyData"
-                try:
-                    os.makedirs(flash_folder, exist_ok=True)
-                    test_file = f"{flash_folder}/test.txt"
-                    with open(test_file, 'w') as f:
-                        f.write("test")
-                    os.remove(test_file)
-                    return f"{flash_folder}/school_data.db"
-                except:
-                    continue
-
-        # For Mac/Linux
-        if os.path.exists("/Volumes"):
-            for volume in os.listdir("/Volumes"):
-                if volume not in ["Macintosh HD", "System"]:
-                    flash_folder = f"/Volumes/{volume}/ShepherdAcademyData"
-                    try:
-                        os.makedirs(flash_folder, exist_ok=True)
-                        return f"{flash_folder}/school_data.db"
-                    except:
-                        continue
-
-        # Fallback to local hard drive
-        fallback_path = os.path.join(os.path.expanduser("~"), "ShepherdAcademyData", "school_data.db")
-        os.makedirs(os.path.dirname(fallback_path), exist_ok=True)
-        return fallback_path
-
-    def _init_database(self):
-        """Create all tables"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
-        # Pupils table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS pupils (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                class TEXT NOT NULL,
-                term_fees INTEGER DEFAULT 0,
-                pupil_type TEXT DEFAULT 'Community Child',
-                is_sponsored INTEGER DEFAULT 0,
-                sponsor_reason TEXT,
-                active INTEGER DEFAULT 1,
-                archived INTEGER DEFAULT 0,
-                enrollment_date TEXT,
-                leaving_date TEXT,
-                leaving_reason TEXT,
-                last_modified TEXT
-            )
-        ''')
-
-        # Ledger table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS ledgers (
-                id TEXT PRIMARY KEY,
-                pupil_id TEXT NOT NULL,
-                term TEXT NOT NULL,
-                year INTEGER NOT NULL,
-                amount INTEGER NOT NULL,
-                description TEXT,
-                balance INTEGER,
-                previous_balance INTEGER,
-                term_fees INTEGER,
-                receipt_no TEXT,
-                excess_amount INTEGER DEFAULT 0,
-                payment_date TEXT,
-                FOREIGN KEY (pupil_id) REFERENCES pupils(id)
-            )
-        ''')
-
-        # Sync metadata table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS sync_metadata (
-                key TEXT PRIMARY KEY,
-                value TEXT,
-                updated_at TEXT
-            )
-        ''')
-
-        conn.commit()
-        conn.close()
-
-    def save_pupil(self, pupil_data):
-        """Save or update pupil"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            INSERT OR REPLACE INTO pupils 
-            (id, name, class, term_fees, pupil_type, is_sponsored, sponsor_reason, 
-             active, archived, enrollment_date, leaving_date, leaving_reason, last_modified)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            pupil_data.get('id'), pupil_data.get('name'), pupil_data.get('class'),
-            pupil_data.get('term_fees', 0), pupil_data.get('pupil_type', 'Community Child'),
-            1 if pupil_data.get('is_sponsored') else 0,
-            pupil_data.get('sponsor_reason', ''),
-            1 if pupil_data.get('active', True) else 0,
-            1 if pupil_data.get('archived', False) else 0,
-            pupil_data.get('enrollment_date'), pupil_data.get('leaving_date'),
-            pupil_data.get('leaving_reason'), datetime.datetime.now().isoformat()
-        ))
-
-        conn.commit()
-        conn.close()
-        return True
-
-    def get_all_pupils(self, include_archived=False):
-        """Get all pupils"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-
-        if include_archived:
-            cursor.execute("SELECT * FROM pupils ORDER BY name")
+    def invalidate(self, key=None):
+        """Clear cache for a specific key or all"""
+        if key:
+            self.cache.pop(key, None)
         else:
-            cursor.execute("SELECT * FROM pupils WHERE active = 1 ORDER BY name")
+            self.cache.clear()
 
-        rows = cursor.fetchall()
-        conn.close()
-        return [dict(row) for row in rows]
-
-    def get_pupil_by_id(self, pupil_id):
-        """Get single pupil"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM pupils WHERE id = ?", (pupil_id,))
-        row = cursor.fetchone()
-        conn.close()
-        return dict(row) if row else None
-
-    def save_ledger_entry(self, ledger_data):
-        """Save ledger entry"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            INSERT OR REPLACE INTO ledgers 
-            (id, pupil_id, term, year, amount, description, balance, 
-             previous_balance, term_fees, receipt_no, excess_amount, payment_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            ledger_data.get('id'), ledger_data.get('pupil_id'), ledger_data.get('term'),
-            ledger_data.get('year'), ledger_data.get('amount'), ledger_data.get('description'),
-            ledger_data.get('balance'), ledger_data.get('previous_balance'),
-            ledger_data.get('term_fees'), ledger_data.get('receipt_no'),
-            ledger_data.get('excess_amount', 0), ledger_data.get('payment_date')
-        ))
-
-        conn.commit()
-        conn.close()
-        return True
-
-    def get_ledger_entries(self, pupil_id, term, year):
-        """Get ledger entries for a pupil"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            SELECT * FROM ledgers 
-            WHERE pupil_id = ? AND term = ? AND year = ?
-            ORDER BY payment_date
-        ''', (pupil_id, term, year))
-
-        rows = cursor.fetchall()
-        conn.close()
-        return [dict(row) for row in rows]
-
-    def get_last_sync(self):
-        """Get last sync timestamp"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("SELECT value FROM sync_metadata WHERE key = 'last_sync'")
-        row = cursor.fetchone()
-        conn.close()
-        return row[0] if row else None
-
-    def set_last_sync(self, timestamp):
-        """Set last sync timestamp"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT OR REPLACE INTO sync_metadata (key, value, updated_at)
-            VALUES ('last_sync', ?, ?)
-        ''', (timestamp, datetime.datetime.now().isoformat()))
-        conn.commit()
-        conn.close()
+    def clear_all(self):
+        """Clear entire cache"""
+        self.cache.clear()
 
 
-# ==================== FIREBASE HELPER ====================
+# Initialize cache with 20 minutes TTL
+cache = SimpleCache(ttl_minutes=20)
 
-def get_firebase_client():
-    """Get Firebase client - cached"""
+
+# ------------------- Firebase Initialization -------------------
+def init_firebase():
+    if st.session_state.get("firebase_done", False):
+        return firestore.client()
+
     if not firebase_admin._apps:
         try:
             firebase_creds = dict(st.secrets["firebase"])
             cred = credentials.Certificate(firebase_creds)
             firebase_admin.initialize_app(cred)
+            st.session_state.firebase_done = True
         except:
             if os.path.exists("firebase-key.json"):
                 cred = credentials.Certificate("firebase-key.json")
                 firebase_admin.initialize_app(cred)
+                st.session_state.firebase_done = True
             else:
-                return None
+                st.error("Firebase credentials not found.")
+                st.stop()
     return firestore.client()
 
 
-db = get_firebase_client()
+db = init_firebase()
 
 
-def is_firebase_available():
-    """Check if Firebase is reachable"""
-    if db is None:
-        return False
-    try:
-        db.collection("test").limit(1).get()
-        return True
-    except:
-        return False
-
-
-# ==================== DATA SYNC MANAGER ====================
-
-class SyncManager:
-    """Manages sync between Firebase and Flash Disk"""
-
-    def __init__(self, flash_db):
-        self.flash_db = flash_db
-        self.sync_in_progress = False
-
-    def sync_from_firebase_to_flash(self):
-        """Download all data from Firebase to flash disk"""
-        if not is_firebase_available():
-            return 0, "Firebase not available"
-
-        try:
-            # Get all pupils from Firebase
-            pupils_ref = db.collection("pupils")
-            pupils_docs = pupils_ref.stream()
-
-            count = 0
-            for doc in pupils_docs:
-                pupil_data = doc.to_dict()
-                pupil_data['id'] = doc.id
-                self.flash_db.save_pupil(pupil_data)
-                count += 1
-
-                # Get ledger entries for this pupil
-                for term in ["Term 1", "Term 2", "Term 3"]:
-                    for year in [2024, 2025, 2026]:
-                        ledger_ref = db.collection("ledgers").document(doc.id).collection(term)
-                        payments = ledger_ref.where("year", "==", year).stream()
-                        for payment in payments:
-                            payment_data = payment.to_dict()
-                            payment_data['id'] = payment.id
-                            payment_data['pupil_id'] = doc.id
-                            payment_data['term'] = term
-                            payment_data['year'] = year
-                            self.flash_db.save_ledger_entry(payment_data)
-
-            self.flash_db.set_last_sync(datetime.datetime.now().isoformat())
-            return count, "Sync completed successfully"
-
-        except Exception as e:
-            return 0, f"Sync error: {str(e)}"
-
-    def sync_from_flash_to_firebase(self):
-        """Upload flash disk data to Firebase"""
-        if not is_firebase_available():
-            return 0, "Firebase not available - offline mode"
-
-        try:
-            pupils = self.flash_db.get_all_pupils(include_archived=True)
-            count = 0
-
-            for pupil in pupils:
-                # Update pupil in Firebase
-                pupil_id = pupil.get('id')
-                if pupil_id:
-                    pupil_copy = pupil.copy()
-                    pupil_copy.pop('id', None)
-                    db.collection("pupils").document(pupil_id).set(pupil_copy)
-                    count += 1
-
-                # Update ledger entries
-                for term in ["Term 1", "Term 2", "Term 3"]:
-                    for year in [2024, 2025, 2026]:
-                        entries = self.flash_db.get_ledger_entries(pupil_id, term, year)
-                        for entry in entries:
-                            entry_id = entry.get('id')
-                            if entry_id:
-                                entry_copy = entry.copy()
-                                entry_copy.pop('id', None)
-                                entry_copy.pop('pupil_id', None)
-                                entry_copy.pop('term', None)
-                                entry_copy.pop('year', None)
-                                db.collection("ledgers").document(pupil_id).collection(term).document(entry_id).set(
-                                    entry_copy)
-
-            self.flash_db.set_last_sync(datetime.datetime.now().isoformat())
-            return count, f"Uploaded {count} records to Firebase"
-
-        except Exception as e:
-            return 0, f"Upload error: {str(e)}"
-
-
-# ==================== INITIALIZE FLASH DATABASE ====================
-
-flash_db = FlashDiskDB()
-sync_manager = SyncManager(flash_db)
-
-# Auto-sync from Firebase to flash on first run
-if flash_db.get_last_sync() is None and is_firebase_available():
-    with st.spinner("Initial sync from Firebase to flash disk..."):
-        count, msg = sync_manager.sync_from_firebase_to_flash()
-        if count > 0:
-            st.success(f"✅ {msg}")
-
-
-# ==================== HELPER FUNCTIONS ====================
-
+# ------------------- Logo Functions -------------------
 def get_logo_base64():
     logo_files = ["images.jfif", "school_logo.jpg", "school_logo.png", "logo.jpg", "logo.png"]
     for logo_file in logo_files:
@@ -471,6 +459,7 @@ def get_logo_base64():
 
 def display_main_header():
     logo_base64, mime_type = get_logo_base64()
+
     if logo_base64:
         st.markdown(f"""
         <div class="main-header">
@@ -499,10 +488,58 @@ def display_main_header():
         """, unsafe_allow_html=True)
 
 
+# ------------------- User Authentication -------------------
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 
+def authenticate_user(username, password):
+    try:
+        users_ref = db.collection("users")
+        user_doc = users_ref.document(username).get()
+
+        if user_doc.exists:
+            user_data = user_doc.to_dict()
+            stored_password = user_data.get("password", "")
+            if stored_password == hash_password(password):
+                return user_data.get("role", "admin")
+        return None
+    except Exception as e:
+        st.error(f"Authentication error: {str(e)}")
+        return None
+
+
+def create_default_users():
+    try:
+        users_ref = db.collection("users")
+        users_list = list(users_ref.stream())
+
+        if len(users_list) == 0:
+            bursar_data = {
+                "username": "bursar",
+                "password": hash_password("bursar123"),
+                "role": "bursar",
+                "full_name": "School Bursar",
+                "created_at": datetime.datetime.now()
+            }
+            users_ref.document("bursar").set(bursar_data)
+
+            admin_data = {
+                "username": "admin",
+                "password": hash_password("admin123"),
+                "role": "admin",
+                "full_name": "School Administrator",
+                "created_at": datetime.datetime.now()
+            }
+            users_ref.document("admin").set(admin_data)
+            return True
+        return False
+    except Exception as e:
+        st.error(f"Error creating users: {str(e)}")
+        return False
+
+
+# ------------------- Helper Functions -------------------
 def generate_receipt_number():
     return f"RCP-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-{str(uuid.uuid4())[:8]}"
 
@@ -603,26 +640,71 @@ def export_summary_to_pdf(df, title, filename):
     return buffer
 
 
-# ==================== FEES MANAGER ====================
+# ------------------- Helper Function to Convert Firebase Docs to Serializable Dicts -------------------
+def firestore_to_serializable(docs):
+    """Convert Firestore documents to serializable dicts"""
+    result = []
+    for doc in docs:
+        data = doc.to_dict()
+        data['id'] = doc.id
+        # Convert datetime to string for serialization
+        for key, value in data.items():
+            if isinstance(value, datetime.datetime):
+                data[key] = value.isoformat()
+        result.append(data)
+    return result
 
+
+# ------------------- Fees Manager -------------------
 class FeesManager:
     def __init__(self):
         self.classes = ["Baby Class", "Middle Class", "Top Class", "P1", "P2", "P3", "P4", "P5", "P6", "P7"]
         self.terms = ["Term 1", "Term 2", "Term 3"]
         self.term_order = {"Term 1": 1, "Term 2": 2, "Term 3": 3}
         self.pupil_types = ["Community Child", "Staff Child", "Shepherd Child"]
-        self.use_flash = True  # Always use flash as primary
 
-    def _get_pupils_from_source(self, include_archived=False):
-        """Get pupils from flash disk (primary source)"""
-        return flash_db.get_all_pupils(include_archived)
+    def get_all_pupils(self, include_archived=False):
+        """Get all pupils with caching - returns serializable dicts"""
+        cache_key = f"all_pupils_{include_archived}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
 
-    def _save_pupil_to_source(self, pupil_data):
-        """Save pupil to flash disk"""
-        return flash_db.save_pupil(pupil_data)
+        try:
+            if include_archived:
+                docs = list(db.collection("pupils").stream())
+            else:
+                docs = list(db.collection("pupils").where("active", "==", True).stream())
+
+            result = firestore_to_serializable(docs)
+            cache.set(cache_key, result)
+            return result
+        except Exception as e:
+            st.error(f"Error fetching pupils: {str(e)}")
+            return []
+
+    def get_archived_pupils(self):
+        """Get archived pupils with caching"""
+        cache_key = "archived_pupils"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            docs = list(db.collection("pupils").where("archived", "==", True).stream())
+            result = firestore_to_serializable(docs)
+            cache.set(cache_key, result)
+            return result
+        except Exception as e:
+            return []
+
+    def get_pupils_by_class(self, class_name, include_archived=False):
+        """Get pupils by class"""
+        all_pupils = self.get_all_pupils(include_archived)
+        return [p for p in all_pupils if p.get("class") == class_name]
 
     def get_previous_term_balance(self, pupil_id, current_term, current_year):
-        """Calculate balance from previous term"""
+        """Calculate balance from previous term that carries over"""
         term_order = self.term_order[current_term]
 
         if term_order == 1:
@@ -635,15 +717,23 @@ class FeesManager:
             prev_term = "Term 2"
             prev_year = current_year
 
-        entries = flash_db.get_ledger_entries(pupil_id, prev_term, prev_year)
-        if entries:
-            return entries[-1].get('balance', 0)
-        return 0
+        try:
+            ledger_ref = db.collection("ledgers").document(pupil_id).collection(prev_term)
+            payments = ledger_ref.where("year", "==", prev_year).stream()
+            payments_list = list(payments)
+
+            if payments_list:
+                last_payment = payments_list[-1].to_dict()
+                balance = last_payment.get("balance", 0)
+                return balance
+            return 0
+        except:
+            return 0
 
     def enroll_pupil(self, name, class_name, term_fees, pupil_type="Community Child"):
         """Enroll a new pupil"""
         try:
-            pupil_id = str(uuid.uuid4())
+            pupil_ref = db.collection("pupils").document()
 
             if pupil_type == "Shepherd Child":
                 is_sponsored = True
@@ -656,11 +746,10 @@ class FeesManager:
                 is_sponsored = False
                 sponsor_reason = ""
 
-            pupil_data = {
-                "id": pupil_id,
+            pupil_ref.set({
                 "name": name,
                 "class": class_name,
-                "enrollment_date": datetime.datetime.now().isoformat(),
+                "enrollment_date": datetime.datetime.now(),
                 "term_fees": term_fees,
                 "pupil_type": pupil_type,
                 "is_sponsored": is_sponsored,
@@ -669,34 +758,31 @@ class FeesManager:
                 "archived": False,
                 "leaving_date": None,
                 "leaving_reason": None
-            }
+            })
 
-            # Save to flash disk first
-            self._save_pupil_to_source(pupil_data)
-
-            # Try to sync to Firebase if online
-            if is_firebase_available():
-                try:
-                    db.collection("pupils").document(pupil_id).set(pupil_data)
-                except:
-                    pass
-
-            return pupil_id
+            # Invalidate relevant caches
+            cache.invalidate(f"all_pupils_True")
+            cache.invalidate(f"all_pupils_False")
+            return pupil_ref.id
         except Exception as e:
             st.error(f"Error enrolling pupil: {str(e)}")
             return None
 
     def get_pupil_details(self, pupil_id):
-        """Get pupil details from flash disk"""
-        return flash_db.get_pupil_by_id(pupil_id)
+        """Get pupil details"""
+        try:
+            doc = db.collection("pupils").document(pupil_id).get()
+            if doc.exists:
+                data = doc.to_dict()
+                data['id'] = doc.id
+                return data
+            return None
+        except Exception as e:
+            return None
 
     def update_pupil(self, pupil_id, name, class_name, term_fees, pupil_type="Community Child"):
         """Update pupil details"""
         try:
-            pupil_data = self.get_pupil_details(pupil_id)
-            if not pupil_data:
-                return False
-
             if pupil_type == "Shepherd Child":
                 is_sponsored = True
                 sponsor_reason = "Shepherd Child"
@@ -708,110 +794,82 @@ class FeesManager:
                 is_sponsored = False
                 sponsor_reason = ""
 
-            pupil_data.update({
+            db.collection("pupils").document(pupil_id).update({
                 "name": name,
                 "class": class_name,
                 "term_fees": term_fees,
                 "pupil_type": pupil_type,
                 "is_sponsored": is_sponsored,
                 "sponsor_reason": sponsor_reason,
-                "last_modified": datetime.datetime.now().isoformat()
+                "updated_at": datetime.datetime.now()
             })
 
-            # Save to flash disk
-            flash_db.save_pupil(pupil_data)
-
-            # Try to sync to Firebase
-            if is_firebase_available():
-                try:
-                    db.collection("pupils").document(pupil_id).update(pupil_data)
-                except:
-                    pass
-
+            # Invalidate caches
+            cache.invalidate()
             return True
         except Exception as e:
             st.error(f"Error updating pupil: {str(e)}")
             return False
 
     def archive_pupil(self, pupil_id, leaving_reason=""):
+        """Archive a pupil"""
         try:
-            pupil_data = self.get_pupil_details(pupil_id)
-            if not pupil_data:
-                return False
-
-            pupil_data.update({
+            db.collection("pupils").document(pupil_id).update({
                 "active": False,
                 "archived": True,
-                "leaving_date": datetime.datetime.now().isoformat(),
-                "leaving_reason": leaving_reason
+                "leaving_date": datetime.datetime.now(),
+                "leaving_reason": leaving_reason,
+                "archived_at": datetime.datetime.now()
             })
-
-            flash_db.save_pupil(pupil_data)
-
-            if is_firebase_available():
-                try:
-                    db.collection("pupils").document(pupil_id).update({
-                        "active": False,
-                        "archived": True,
-                        "leaving_date": datetime.datetime.now().isoformat(),
-                        "leaving_reason": leaving_reason
-                    })
-                except:
-                    pass
-
+            cache.invalidate()
             return True
         except Exception as e:
             st.error(f"Error archiving pupil: {str(e)}")
             return False
 
     def restore_pupil(self, pupil_id):
+        """Restore an archived pupil"""
         try:
-            pupil_data = self.get_pupil_details(pupil_id)
-            if not pupil_data:
-                return False
-
-            pupil_data.update({
+            db.collection("pupils").document(pupil_id).update({
                 "active": True,
                 "archived": False,
-                "leaving_date": None,
-                "leaving_reason": None
+                "restored_at": datetime.datetime.now()
             })
-
-            flash_db.save_pupil(pupil_data)
-
-            if is_firebase_available():
-                try:
-                    db.collection("pupils").document(pupil_id).update({
-                        "active": True,
-                        "archived": False,
-                        "leaving_date": None,
-                        "leaving_reason": None
-                    })
-                except:
-                    pass
-
+            cache.invalidate()
             return True
         except Exception as e:
             st.error(f"Error restoring pupil: {str(e)}")
             return False
 
-    def get_pupils(self, class_name, include_archived=False):
-        all_pupils = self._get_pupils_from_source(include_archived)
-        return [p for p in all_pupils if p.get('class') == class_name]
-
-    def get_all_pupils(self, include_archived=False):
-        return self._get_pupils_from_source(include_archived)
-
-    def get_archived_pupils(self):
-        all_pupils = self._get_pupils_from_source(True)
-        return [p for p in all_pupils if p.get('archived', False)]
-
     def get_ledger(self, pupil_id, term, year):
-        return flash_db.get_ledger_entries(pupil_id, term, year)
+        """Get ledger entries"""
+        cache_key = f"ledger_{pupil_id}_{term}_{year}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            ledger_ref = db.collection("ledgers").document(pupil_id).collection(term)
+            all_docs = list(ledger_ref.stream())
+            filtered_docs = []
+            for doc in all_docs:
+                data = doc.to_dict()
+                doc_year = data.get("year")
+                if doc_year is not None and int(doc_year) == int(year):
+                    filtered_docs.append(doc)
+            filtered_docs.sort(key=lambda x: x.to_dict().get("date", datetime.datetime.min))
+
+            result = firestore_to_serializable(filtered_docs)
+            cache.set(cache_key, result)
+            return result
+        except Exception as e:
+            st.error(f"Error fetching ledger: {str(e)}")
+            return []
 
     def add_payment(self, pupil_id, term, year, amount, description):
-        """Add a payment"""
+        """Add a payment with excess handling"""
         try:
+            ledger_ref = db.collection("ledgers").document(pupil_id).collection(term)
             pupil = self.get_pupil_details(pupil_id)
             if not pupil:
                 return None, "Pupil not found", None, None, 0
@@ -824,8 +882,8 @@ class FeesManager:
 
             year_int = int(year)
             previous_balance = self.get_previous_term_balance(pupil_id, term, year_int)
-            existing_payments = self.get_ledger(pupil_id, term, year_int)
-            total_paid_this_term = sum([p.get('amount', 0) for p in existing_payments])
+            payments = ledger_ref.where("year", "==", year_int).stream()
+            total_paid_this_term = sum([p.to_dict().get("amount", 0) for p in payments])
 
             total_due = previous_balance + term_fees
             total_paid = total_paid_this_term + amount
@@ -839,36 +897,23 @@ class FeesManager:
             transaction_id = str(uuid.uuid4())
             receipt_no = generate_receipt_number()
 
-            ledger_data = {
-                "id": transaction_id,
-                "pupil_id": pupil_id,
-                "term": term,
-                "year": year_int,
+            ledger_ref.document(transaction_id).set({
+                "date": datetime.datetime.now(),
                 "amount": amount,
                 "description": description,
                 "balance": new_balance,
                 "previous_balance": previous_balance,
                 "term_fees": term_fees,
+                "total_due": total_due,
+                "year": year_int,
                 "receipt_no": receipt_no,
-                "excess_amount": excess_amount,
-                "payment_date": datetime.datetime.now().isoformat()
-            }
+                "excess_amount": excess_amount
+            })
 
-            # Save to flash disk
-            flash_db.save_ledger_entry(ledger_data)
-
-            # Try to sync to Firebase
-            if is_firebase_available():
-                try:
-                    ledger_copy = ledger_data.copy()
-                    ledger_copy.pop('id', None)
-                    ledger_copy.pop('pupil_id', None)
-                    ledger_copy.pop('term', None)
-                    ledger_copy.pop('year', None)
-                    db.collection("ledgers").document(pupil_id).collection(term).document(transaction_id).set(
-                        ledger_copy)
-                except:
-                    pass
+            # Invalidate relevant caches
+            cache.invalidate(f"ledger_{pupil_id}_{term}_{year_int}")
+            cache.invalidate(f"dashboard_stats_{term}_{year_int}")
+            cache.invalidate(f"school_summary_{term}_{year_int}")
 
             return transaction_id, new_balance, receipt_no, previous_balance, excess_amount
         except Exception as e:
@@ -876,6 +921,7 @@ class FeesManager:
             return None, str(e), None, None, 0
 
     def get_pupil_term_summary(self, pupil_id, term, year):
+        """Get pupil term summary"""
         pupil_data = self.get_pupil_details(pupil_id)
         if not pupil_data:
             return None, 0, 0, 0, 0, 0, False, "", False, "Community Child"
@@ -891,7 +937,7 @@ class FeesManager:
 
         previous_balance = self.get_previous_term_balance(pupil_id, term, year)
         payments = self.get_ledger(pupil_id, term, year)
-        total_paid = sum([p.get('amount', 0) for p in payments])
+        total_paid = sum([p.get("amount", 0) for p in payments])
 
         total_due = previous_balance + term_fees
         balance = max(0, total_due - total_paid)
@@ -900,7 +946,8 @@ class FeesManager:
         return pupil_data, term_fees, total_paid, balance, previous_balance, credit_balance, is_sponsored, sponsor_reason, is_archived, pupil_type
 
     def get_class_summary(self, class_name, term, year, include_archived=False):
-        pupils = self.get_pupils(class_name, include_archived)
+        """Get class summary as DataFrames"""
+        pupils = self.get_pupils_by_class(class_name, include_archived)
         summary = []
         cleared_list = []
         not_cleared_list = []
@@ -919,7 +966,7 @@ class FeesManager:
 
             previous_balance = self.get_previous_term_balance(pupil_id, term, year)
             payments = self.get_ledger(pupil_id, term, year)
-            total_paid = sum([p.get('amount', 0) for p in payments])
+            total_paid = sum([p.get("amount", 0) for p in payments])
 
             total_due = previous_balance + term_fees
             balance = max(0, total_due - total_paid)
@@ -970,13 +1017,19 @@ class FeesManager:
         return df_summary, df_cleared, df_not_cleared, df_archived
 
     def get_school_wide_summary(self, term, year, include_archived=False):
-        pupils = self.get_all_pupils(include_archived)
+        """Get school-wide summary as DataFrames"""
+        cache_key = f"school_summary_{term}_{year}_{include_archived}"
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return cached_result
+
+        all_pupils = self.get_all_pupils(include_archived)
         all_summaries = []
         staff_summaries = []
         shepherd_summaries = []
         community_summaries = []
 
-        for pupil in pupils:
+        for pupil in all_pupils:
             pupil_id = pupil.get('id')
             term_fees = pupil.get("term_fees", 0)
             is_sponsored = pupil.get("is_sponsored", False)
@@ -989,7 +1042,7 @@ class FeesManager:
 
             previous_balance = self.get_previous_term_balance(pupil_id, term, year)
             payments = self.get_ledger(pupil_id, term, year)
-            total_paid = sum([p.get('amount', 0) for p in payments])
+            total_paid = sum([p.get("amount", 0) for p in payments])
 
             total_due = previous_balance + term_fees
             balance = max(0, total_due - total_paid)
@@ -1038,9 +1091,17 @@ class FeesManager:
         if not df_community.empty:
             df_community.insert(0, "No.", range(1, len(df_community) + 1))
 
-        return df_all, df_staff, df_shepherd, df_community
+        result = (df_all, df_staff, df_shepherd, df_community)
+        cache.set(cache_key, result)
+        return result
 
     def get_dashboard_stats(self, term, year):
+        """Get dashboard statistics with caching"""
+        cache_key = f"dashboard_stats_{term}_{year}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         all_pupils = self.get_all_pupils(include_archived=False)
 
         stats = {
@@ -1073,23 +1134,25 @@ class FeesManager:
 
             pupil_id = pupil.get('id')
             payments = self.get_ledger(pupil_id, term, year)
-            total_paid = sum([p.get('amount', 0) for p in payments])
+            total_paid = sum([p.get("amount", 0) for p in payments])
             stats["total_collected"] += total_paid
 
         stats["total_balance"] = stats["total_expected"] - stats["total_collected"]
         if stats["total_expected"] > 0:
             stats["collection_rate"] = (stats["total_collected"] / stats["total_expected"]) * 100
 
+        cache.set(cache_key, stats)
         return stats
 
 
-# ==================== LOGIN PAGE ====================
-
+# ------------------- Login Page -------------------
 def login_page():
     if not st.session_state.get("login_loaded", False):
         with st.spinner("Loading Shepherd Academy School Fees Management System..."):
             time.sleep(0.5)
         st.session_state.login_loaded = True
+
+    create_default_users()
 
     col1, col2, col3 = st.columns([1, 1.3, 1])
 
@@ -1119,32 +1182,26 @@ def login_page():
             </div>
             """, unsafe_allow_html=True)
 
-        # Show flash disk info
-        st.info(f"💾 Flash Disk DB: {os.path.basename(os.path.dirname(flash_db.db_path))}\n📁 {flash_db.db_path}")
-
         with st.form(key="login_form"):
             username = st.text_input("Username", placeholder="Enter your username")
             password = st.text_input("Password", type="password", placeholder="Enter your password")
             submitted = st.form_submit_button("Sign In", use_container_width=True)
 
             if submitted:
-                # Simple authentication (you can expand this)
-                if username == "bursar" and password == "bursar123":
-                    st.session_state.logged_in = True
-                    st.session_state.username = username
-                    st.session_state.role = "bursar"
-                    st.rerun()
-                elif username == "admin" and password == "admin123":
-                    st.session_state.logged_in = True
-                    st.session_state.username = username
-                    st.session_state.role = "admin"
-                    st.rerun()
+                if not username or not password:
+                    st.error("Please enter both username and password")
                 else:
-                    st.error("Invalid username or password")
+                    role = authenticate_user(username, password)
+                    if role:
+                        st.session_state.logged_in = True
+                        st.session_state.username = username
+                        st.session_state.role = role
+                        st.rerun()
+                    else:
+                        st.error("Invalid username or password")
 
 
-# ==================== MAIN APP ====================
-
+# ------------------- Main App -------------------
 def main_app():
     display_main_header()
 
@@ -1181,52 +1238,6 @@ def main_app():
                     unsafe_allow_html=True)
 
         st.markdown("---")
-
-        # ========== SYNC STATUS SECTION ==========
-        st.markdown("### 💾 Storage & Sync")
-
-        # Show flash disk location
-        flash_folder = os.path.dirname(flash_db.db_path)
-        st.caption(f"📀 Flash DB: {os.path.basename(flash_folder)}")
-
-        # Show online/offline status
-        if is_firebase_available():
-            st.success("☁️ Firebase Online")
-            st.caption("✅ Auto-sync enabled")
-        else:
-            st.warning("📴 Offline Mode")
-            st.caption("⚠️ Working from flash disk only")
-
-        # Show last sync time
-        last_sync = flash_db.get_last_sync()
-        if last_sync:
-            st.caption(f"Last sync: {last_sync[:16]}")
-
-        # Sync buttons
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("📥 Download from Cloud", use_container_width=True, key="download_btn"):
-                with st.spinner("Downloading from Firebase..."):
-                    count, msg = sync_manager.sync_from_firebase_to_flash()
-                    if count > 0:
-                        st.success(f"✅ Downloaded {count} records")
-                        st.rerun()
-                    else:
-                        st.info(msg)
-
-        with col2:
-            if st.button("📤 Upload to Cloud", use_container_width=True, key="upload_btn"):
-                if is_firebase_available():
-                    with st.spinner("Uploading to Firebase..."):
-                        count, msg = sync_manager.sync_from_flash_to_firebase()
-                        if count > 0:
-                            st.success(f"✅ Uploaded {count} records")
-                        else:
-                            st.info(msg)
-                else:
-                    st.error("Firebase not available - check internet")
-
-        st.markdown("---")
         st.markdown("### Navigation")
 
         if role == "bursar":
@@ -1254,12 +1265,15 @@ def main_app():
         st.markdown("---")
 
         if role == "bursar" and menu in ["Pupils & Ledgers", "Class Reports", "School Reports"]:
-            st.session_state.show_archived = st.checkbox("Show Archived Pupils", value=st.session_state.show_archived)
+            show_archived = st.checkbox("Show Archived Pupils", value=st.session_state.show_archived,
+                                        key="show_archived_checkbox")
+            st.session_state.show_archived = show_archived
 
         if st.button("🚪 Logout", key="logout_btn", use_container_width=True):
             for key in ["logged_in", "username", "role", "navigation_menu", "show_archived"]:
                 if key in st.session_state:
                     del st.session_state[key]
+            cache.clear_all()
             st.rerun()
 
     manager = FeesManager()
@@ -1344,7 +1358,7 @@ def main_app():
         with col_search:
             search_term = st.text_input("Search Pupil", placeholder="Type name to search...")
 
-        pupils = manager.get_pupils(selected_class, include_archived=st.session_state.show_archived)
+        pupils = manager.get_pupils_by_class(selected_class, include_archived=st.session_state.show_archived)
         if search_term:
             pupils = [p for p in pupils if search_term.lower() in p.get("name", "").lower()]
 
@@ -1419,7 +1433,7 @@ def main_app():
                 for idx, entry in enumerate(ledger_entries, 1):
                     all_transactions.append({
                         "S/No": idx,
-                        "Date": entry.get("payment_date", ""),
+                        "Date": entry.get("date", ""),
                         "Amount Paid": f"UGX {entry.get('amount', 0):,.0f}",
                         "Description": entry.get("description", "Payment"),
                         "Balance After": f"UGX {entry.get('balance', 0):,.0f}",
@@ -1462,7 +1476,7 @@ def main_app():
                                         school_name="Shepherd Academy Busiu",
                                         logo_path="images.jfif" if os.path.exists("images.jfif") else "",
                                         receipt_num=entry.get('receipt_no', ''),
-                                        date_str=entry.get('payment_date', ''),
+                                        date_str=entry.get('date', ''),
                                         child_name=pupil['name'],
                                         amount=entry.get('amount', 0),
                                         description=entry.get('description', ''),
@@ -1788,6 +1802,11 @@ def main_app():
 
                 for pupil in pupil_dicts:
                     pupil_type = pupil.get("pupil_type", "Community Child")
+                    type_badge = {
+                        "Staff Child": "badge-staff",
+                        "Shepherd Child": "badge-shepherd",
+                        "Community Child": "badge-community"
+                    }.get(pupil_type, "badge-community")
 
                     with st.expander(
                             f"📌 {pupil['name']} - {pupil['class']} (Fees: UGX {pupil.get('term_fees', 0):,.0f})"):
@@ -1797,9 +1816,9 @@ def main_app():
                             **Current Information:**
                             - **Name:** {pupil['name']}
                             - **Class:** {pupil['class']}
-                            - **Pupil Type:** {pupil_type}
+                            - **Pupil Type:** <span class='{type_badge}'>{pupil_type}</span>
                             - **Term Fees:** UGX {pupil.get('term_fees', 0):,.0f}
-                            """)
+                            """, unsafe_allow_html=True)
 
                         with col2:
                             total_paid_all = 0
@@ -1852,7 +1871,7 @@ def main_app():
                                         st.error("Please provide a reason for leaving")
 
     # ------------------- Archived Pupils -------------------
-    elif menu == "Archived Pupils":
+    elif menu == "Archived Pupils" and role == "bursar":
         st.markdown("<h1 style='color: #1E3A5F;'>Archived Pupils (Left School)</h1>", unsafe_allow_html=True)
         st.info("These pupils have left the school. Their historical payment records are preserved.")
 
@@ -1865,11 +1884,10 @@ def main_app():
                 with st.expander(
                         f"📌 {pupil['name']} - {pupil['class']} (Left: {pupil.get('leaving_date', 'Unknown')[:10] if pupil.get('leaving_date') else 'Unknown'})"):
                     st.markdown(f"**Reason:** {pupil.get('leaving_reason', 'Not specified')}")
-                    if role == "bursar":
-                        if st.button(f"🔄 Restore Pupil", key=f"restore_{pupil['id']}"):
-                            if manager.restore_pupil(pupil['id']):
-                                st.success(f"✅ {pupil['name']} restored!")
-                                st.rerun()
+                    if st.button(f"🔄 Restore Pupil", key=f"restore_{pupil['id']}"):
+                        if manager.restore_pupil(pupil['id']):
+                            st.success(f"✅ {pupil['name']} restored!")
+                            st.rerun()
 
 
 def main():
