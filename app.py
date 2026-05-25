@@ -1850,77 +1850,127 @@ def main_app():
                 st.markdown("---")
                 st.markdown("### 📊 School-Wide Summary Statistics")
 
-                # Safe way to filter out archived - check if Status column exists
-                if "Status" in df_to_show.columns:
-                    financial_df = df_to_show[df_to_show["Status"] != "Archived (Left School)"]
-                else:
-                    financial_df = df_to_show
+                # Filter out archived for financial stats
+                financial_df = df_to_show[
+                    df_to_show["Status"] != "Archived (Left School)"] if "Status" in df_to_show.columns else df_to_show
 
                 if not financial_df.empty:
-                    # Get column names safely
-                    term_fees_col = "Term Fees (UGX)" if "Term Fees (UGX)" in financial_df.columns else "term_fees"
-                    total_paid_col = "Total Paid (UGX)" if "Total Paid (UGX)" in financial_df.columns else "total_paid"
-                    balance_col = "Balance (UGX)" if "Balance (UGX)" in financial_df.columns else "balance"
-                    status_col = "Status" if "Status" in financial_df.columns else "status"
-                    pupil_type_col = "Pupil Type" if "Pupil Type" in financial_df.columns else "pupil_type"
-                    class_col = "Class" if "Class" in financial_df.columns else "class"
-
-                    # Calculate totals
+                    # Calculate totals using correct column names
                     total_pupils = len(financial_df)
-                    total_expected = financial_df[term_fees_col].sum() if term_fees_col in financial_df.columns else 0
-                    total_paid = financial_df[total_paid_col].sum() if total_paid_col in financial_df.columns else 0
-                    total_balance = financial_df[balance_col].sum() if balance_col in financial_df.columns else 0
+                    total_expected = financial_df["Term Fees (UGX)"].sum()
+                    total_paid = financial_df["Total Paid (UGX)"].sum()
+                    total_balance = financial_df["Balance (UGX)"].sum()
 
-                    # Count cleared/not cleared
-                    if status_col in financial_df.columns:
-                        cleared_count = len(financial_df[financial_df[status_col] == "Cleared"])
-                        not_cleared_count = len(financial_df[financial_df[status_col] == "Not Cleared"])
-                    else:
-                        cleared_count = 0
-                        not_cleared_count = 0
+                    cleared_count = len(financial_df[financial_df["Status"] == "Cleared"])
+                    not_cleared_count = len(financial_df[financial_df["Status"] == "Not Cleared"])
 
                     collection_rate = (total_paid / total_expected * 100) if total_expected > 0 else 0
 
-                    # Row 1: Overall metrics
-                    col_a, col_b, col_c, col_d, col_e, col_f = st.columns(6)
-                    with col_a:
-                        st.metric("📚 Total Pupils", total_pupils)
-                    with col_b:
-                        st.metric("💰 Total Expected", f"UGX {total_expected:,.0f}")
-                    with col_c:
-                        st.metric("✅ Total Collected", f"UGX {total_paid:,.0f}")
-                    with col_d:
-                        st.metric("⚠️ Total Balance", f"UGX {total_balance:,.0f}")
-                    with col_e:
-                        st.metric("🎯 Cleared", cleared_count)
-                    with col_f:
-                        st.metric("❌ Not Cleared", not_cleared_count)
+                    # Compact CSS for smaller cards
+                    st.markdown("""
+                    <style>
+                        .compact-metric {
+                            background: white;
+                            border-radius: 8px;
+                            padding: 6px;
+                            text-align: center;
+                            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+                        }
+                        .compact-value {
+                            font-size: 1rem;
+                            font-weight: 700;
+                            margin: 0;
+                            color: #1E3A5F;
+                        }
+                        .compact-label {
+                            font-size: 0.6rem;
+                            color: #6C757D;
+                            margin: 2px 0 0 0;
+                        }
+                    </style>
+                    """, unsafe_allow_html=True)
 
+                    # Row 1: Compact metrics with full figures
+                    col_a, col_b, col_c, col_d, col_e, col_f = st.columns(6)
+
+                    with col_a:
+                        st.markdown(f"""
+                        <div class="compact-metric">
+                            <p class="compact-value">{total_pupils}</p>
+                            <p class="compact-label">Total Pupils</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    with col_b:
+                        st.markdown(f"""
+                        <div class="compact-metric">
+                            <p class="compact-value" style="font-size: 0.75rem;">UGX {total_expected:,.0f}</p>
+                            <p class="compact-label">Total Expected</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    with col_c:
+                        st.markdown(f"""
+                        <div class="compact-metric">
+                            <p class="compact-value" style="font-size: 0.75rem;">UGX {total_paid:,.0f}</p>
+                            <p class="compact-label">Total Collected</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    with col_d:
+                        st.markdown(f"""
+                        <div class="compact-metric">
+                            <p class="compact-value" style="font-size: 0.75rem;">UGX {total_balance:,.0f}</p>
+                            <p class="compact-label">Total Balance</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    with col_e:
+                        st.markdown(f"""
+                        <div class="compact-metric">
+                            <p class="compact-value">{cleared_count}</p>
+                            <p class="compact-label">Cleared</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    with col_f:
+                        st.markdown(f"""
+                        <div class="compact-metric">
+                            <p class="compact-value">{not_cleared_count}</p>
+                            <p class="compact-label">Not Cleared</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    # Progress bar
                     if collection_rate > 0:
                         st.progress(collection_rate / 100)
-                        st.caption(f"📈 Overall Collection Rate: {collection_rate:.1f}%")
+                        st.caption(f"📈 Collection Rate: {collection_rate:.1f}%")
 
                     st.markdown("---")
 
                     # ========== PERFORMANCE BY CLASS ==========
                     st.markdown("### 🏫 Performance by Class")
 
-                    if class_col in financial_df.columns and term_fees_col in financial_df.columns:
-                        class_summary = financial_df.groupby(class_col).agg({
-                            term_fees_col: "sum",
-                            total_paid_col: "sum",
-                            balance_col: "sum",
-                            "Name": "count"
-                        }).rename(columns={"Name": "Pupils", term_fees_col: "Term Fees (UGX)",
-                                           total_paid_col: "Total Paid (UGX)", balance_col: "Balance (UGX)"})
+                    # Use correct column names for grouping
+                    if "Class" in financial_df.columns:
+                        class_summary = financial_df.groupby("Class").agg({
+                            "Term Fees (UGX)": "sum",
+                            "Total Paid (UGX)": "sum",
+                            "Balance (UGX)": "sum"
+                        }).reset_index()
 
+                        # Add pupil count
+                        class_pupil_count = financial_df.groupby("Class").size().reset_index(name="Pupils")
+                        class_summary = class_summary.merge(class_pupil_count, on="Class")
                         class_summary["Collection Rate"] = (
                                     class_summary["Total Paid (UGX)"] / class_summary["Term Fees (UGX)"] * 100).fillna(
                             0).round(1)
                         class_summary = class_summary.sort_values("Class")
 
+                        # Display compact class summary
                         st.dataframe(
-                            class_summary.style.format({
+                            class_summary[["Class", "Pupils", "Term Fees (UGX)", "Total Paid (UGX)", "Balance (UGX)",
+                                           "Collection Rate"]].style.format({
                                 "Term Fees (UGX)": "UGX {:,.0f}",
                                 "Total Paid (UGX)": "UGX {:,.0f}",
                                 "Balance (UGX)": "UGX {:,.0f}",
@@ -1929,9 +1979,10 @@ def main_app():
                             use_container_width=True
                         )
 
+                        # Bar chart for collection rate by class
                         if len(class_summary) > 1:
                             fig = px.bar(
-                                class_summary.reset_index(),
+                                class_summary,
                                 x="Class",
                                 y="Collection Rate",
                                 title="Collection Rate by Class",
@@ -1948,52 +1999,52 @@ def main_app():
                     # ========== PERFORMANCE BY CATEGORY ==========
                     st.markdown("### 👥 Performance by Pupil Category")
 
-                    if pupil_type_col in financial_df.columns:
-                        category_summary = financial_df.groupby(pupil_type_col).agg({
-                            term_fees_col: "sum",
-                            total_paid_col: "sum",
-                            balance_col: "sum",
-                            "Name": "count"
-                        }).rename(columns={"Name": "Pupils", term_fees_col: "Term Fees (UGX)",
-                                           total_paid_col: "Total Paid (UGX)", balance_col: "Balance (UGX)"})
+                    if "Pupil Type" in financial_df.columns:
+                        category_summary = financial_df.groupby("Pupil Type").agg({
+                            "Term Fees (UGX)": "sum",
+                            "Total Paid (UGX)": "sum",
+                            "Balance (UGX)": "sum"
+                        }).reset_index()
 
+                        category_pupil_count = financial_df.groupby("Pupil Type").size().reset_index(name="Pupils")
+                        category_summary = category_summary.merge(category_pupil_count, on="Pupil Type")
                         category_summary["Collection Rate"] = (category_summary["Total Paid (UGX)"] / category_summary[
                             "Term Fees (UGX)"] * 100).fillna(0).round(1)
 
-                        # Display category summary in columns
+                        # Display category summary in compact columns
                         cat_cols = st.columns(len(category_summary))
-                        for idx, (cat_type, row) in enumerate(category_summary.iterrows()):
+                        for idx, row in category_summary.iterrows():
                             with cat_cols[idx]:
                                 st.markdown(f"""
-                                <div style="background: linear-gradient(135deg, #F8F9FA 0%, #FFFFFF 100%); border-radius: 15px; padding: 15px; margin: 5px 0; border-left: 4px solid #1E3A5F;">
-                                    <h3 style="color: #1E3A5F; margin: 0 0 10px 0; font-size: 1rem;">{cat_type}</h3>
-                                    <p style="margin: 5px 0; font-size: 0.75rem;">👥 Pupils: {int(row['Pupils'])}</p>
-                                    <p style="margin: 5px 0; font-size: 0.75rem;">💰 Expected: UGX {row['Term Fees (UGX)']:,.0f}</p>
-                                    <p style="margin: 5px 0; font-size: 0.75rem;">✅ Paid: UGX {row['Total Paid (UGX)']:,.0f}</p>
-                                    <p style="margin: 5px 0; font-size: 0.75rem;">⚠️ Balance: UGX {row['Balance (UGX)']:,.0f}</p>
-                                    <p style="margin: 5px 0; font-size: 0.75rem; font-weight: bold;">📊 Rate: {row['Collection Rate']:.1f}%</p>
+                                <div style="background: #F8F9FA; border-radius: 8px; padding: 8px; margin: 5px 0; text-align: center;">
+                                    <p style="font-weight: 700; margin: 0; font-size: 0.7rem;">{row['Pupil Type']}</p>
+                                    <p style="margin: 2px 0; font-size: 0.6rem;">👥 {int(row['Pupils'])}</p>
+                                    <p style="margin: 2px 0; font-size: 0.6rem;">💰 UGX {row['Term Fees (UGX)']:,.0f}</p>
+                                    <p style="margin: 2px 0; font-size: 0.6rem;">✅ UGX {row['Total Paid (UGX)']:,.0f}</p>
+                                    <p style="margin: 2px 0; font-size: 0.6rem;">⚠️ UGX {row['Balance (UGX)']:,.0f}</p>
+                                    <p style="margin: 2px 0; font-size: 0.7rem; font-weight: 700;">📊 {row['Collection Rate']:.1f}%</p>
                                 </div>
                                 """, unsafe_allow_html=True)
 
                         # Pie chart for category distribution
                         fig2 = px.pie(
-                            category_summary.reset_index(),
+                            category_summary,
                             values="Pupils",
                             names="Pupil Type",
                             title="Pupil Distribution by Category",
                             color_discrete_sequence=px.colors.qualitative.Set2
                         )
-                        fig2.update_layout(plot_bgcolor='white', paper_bgcolor='white', height=400)
+                        fig2.update_layout(plot_bgcolor='white', paper_bgcolor='white', height=350)
                         st.plotly_chart(fig2, use_container_width=True)
 
                     st.markdown("---")
 
                     # ========== TOP PERFORMING CLASSES ==========
-                    if class_col in financial_df.columns and len(class_summary) > 0:
-                        st.markdown("### 🏆 Top Performing Classes")
+                    if "Class" in financial_df.columns and len(class_summary) > 0:
+                        st.markdown("### 🏆 Top 5 Performing Classes")
 
                         top_classes = class_summary.nlargest(5, "Collection Rate")[
-                            ["Pupils", "Term Fees (UGX)", "Total Paid (UGX)", "Collection Rate"]]
+                            ["Class", "Pupils", "Term Fees (UGX)", "Total Paid (UGX)", "Collection Rate"]]
                         st.dataframe(
                             top_classes.style.format({
                                 "Term Fees (UGX)": "UGX {:,.0f}",
