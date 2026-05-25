@@ -1821,14 +1821,6 @@ def main_app():
             df_all, df_staff, df_shepherd, df_community = manager.get_school_wide_summary(
                 current_term, current_year, include_archived=st.session_state.show_archived)
 
-            # DEBUG: Show column names
-            st.write("=== DEBUG INFO ===")
-            st.write("df_all columns:", list(df_all.columns) if not df_all.empty else "Empty")
-            st.write("df_all shape:", df_all.shape if not df_all.empty else "Empty")
-            if not df_all.empty:
-                st.dataframe(df_all.head())
-            st.write("=================")
-
             # Apply filters
             if filter_class != "All Classes" and not df_all.empty:
                 if "Class" in df_all.columns:
@@ -1843,22 +1835,14 @@ def main_app():
             else:
                 df_to_show = df_all
 
-            # Apply status filter - try different possible column names
+            # Apply status filter
             if not df_to_show.empty and filter_status != "All":
-                # Check what column name exists
-                status_col = None
-                for col in ["Status", "status", "STATUS"]:
-                    if col in df_to_show.columns:
-                        status_col = col
-                        break
-
-                if status_col:
-                    if filter_status == "Cleared":
-                        df_to_show = df_to_show[df_to_show[status_col] == "Cleared"]
-                    elif filter_status == "Not Cleared":
-                        df_to_show = df_to_show[df_to_show[status_col] == "Not Cleared"]
-                    elif filter_status == "Archived":
-                        df_to_show = df_to_show[df_to_show[status_col] == "Archived (Left School)"]
+                if filter_status == "Cleared":
+                    df_to_show = df_to_show[df_to_show["Status"] == "Cleared"]
+                elif filter_status == "Not Cleared":
+                    df_to_show = df_to_show[df_to_show["Status"] == "Not Cleared"]
+                elif filter_status == "Archived":
+                    df_to_show = df_to_show[df_to_show["Status"] == "Archived (Left School)"]
 
             if not df_to_show.empty:
                 st.dataframe(df_to_show, use_container_width=True)
@@ -1887,31 +1871,18 @@ def main_app():
                 </style>
                 """, unsafe_allow_html=True)
 
-                # Filter out archived - find the correct column name
-                financial_df = df_to_show.copy()
-                if "Status" in financial_df.columns:
-                    financial_df = financial_df[financial_df["Status"] != "Archived (Left School)"]
-                elif "status" in financial_df.columns:
-                    financial_df = financial_df[financial_df["status"] != "Archived (Left School)"]
+                # Filter out archived for financial stats
+                financial_df = df_to_show[df_to_show["Status"] != "Archived (Left School)"].copy() if not df_to_show.empty else pd.DataFrame()
 
                 if not financial_df.empty:
-                    # Determine column names dynamically
-                    term_fees_col = "Term Fees (UGX)" if "Term Fees (UGX)" in financial_df.columns else "term_fees"
-                    total_paid_col = "Total Paid (UGX)" if "Total Paid (UGX)" in financial_df.columns else "total_paid"
-                    balance_col = "Balance (UGX)" if "Balance (UGX)" in financial_df.columns else "balance"
-                    class_col = "Class" if "Class" in financial_df.columns else "class"
-                    pupil_type_col = "Pupil Type" if "Pupil Type" in financial_df.columns else "pupil_type"
-                    status_col_final = "Status" if "Status" in financial_df.columns else "status"
-
                     # Calculate totals
                     total_pupils = len(financial_df)
-                    total_expected = financial_df[term_fees_col].sum()
-                    total_paid = financial_df[total_paid_col].sum()
-                    total_balance = financial_df[balance_col].sum()
+                    total_expected = financial_df["Term Fees (UGX)"].sum()
+                    total_paid = financial_df["Total Paid (UGX)"].sum()
+                    total_balance = financial_df["Balance (UGX)"].sum()
 
-                    # Count cleared/not cleared
-                    cleared_count = len(financial_df[financial_df[status_col_final] == "Cleared"])
-                    not_cleared_count = len(financial_df[financial_df[status_col_final] == "Not Cleared"])
+                    cleared_count = len(financial_df[financial_df["Status"] == "Cleared"])
+                    not_cleared_count = len(financial_df[financial_df["Status"] == "Not Cleared"])
 
                     collection_rate = (total_paid / total_expected * 100) if total_expected > 0 else 0
 
@@ -1941,21 +1912,19 @@ def main_app():
 
                     # Build class summary manually
                     class_summary_list = []
-                    for class_name in financial_df[class_col].unique():
-                        class_data = financial_df[financial_df[class_col] == class_name]
+                    for class_name in financial_df["Class"].unique():
+                        class_data = financial_df[financial_df["Class"] == class_name]
                         class_summary_list.append({
                             "Class": class_name,
                             "Pupils": len(class_data),
-                            "Expected": class_data[term_fees_col].sum(),
-                            "Collected": class_data[total_paid_col].sum(),
-                            "Balance": class_data[balance_col].sum()
+                            "Expected": class_data["Term Fees (UGX)"].sum(),
+                            "Collected": class_data["Total Paid (UGX)"].sum(),
+                            "Balance": class_data["Balance (UGX)"].sum()
                         })
 
                     if class_summary_list:
                         class_summary_df = pd.DataFrame(class_summary_list)
-                        class_summary_df["Rate"] = (
-                                    class_summary_df["Collected"] / class_summary_df["Expected"] * 100).fillna(0).round(
-                            1)
+                        class_summary_df["Rate"] = (class_summary_df["Collected"] / class_summary_df["Expected"] * 100).fillna(0).round(1)
                         class_summary_df = class_summary_df.sort_values("Class")
 
                         st.dataframe(
@@ -1989,21 +1958,19 @@ def main_app():
 
                     # Build category summary manually
                     category_summary_list = []
-                    for cat_type in financial_df[pupil_type_col].unique():
-                        cat_data = financial_df[financial_df[pupil_type_col] == cat_type]
+                    for cat_type in financial_df["Pupil Type"].unique():
+                        cat_data = financial_df[financial_df["Pupil Type"] == cat_type]
                         category_summary_list.append({
                             "Category": cat_type,
                             "Pupils": len(cat_data),
-                            "Expected": cat_data[term_fees_col].sum(),
-                            "Collected": cat_data[total_paid_col].sum(),
-                            "Balance": cat_data[balance_col].sum()
+                            "Expected": cat_data["Term Fees (UGX)"].sum(),
+                            "Collected": cat_data["Total Paid (UGX)"].sum(),
+                            "Balance": cat_data["Balance (UGX)"].sum()
                         })
 
                     if category_summary_list:
                         category_summary_df = pd.DataFrame(category_summary_list)
-                        category_summary_df["Rate"] = (
-                                    category_summary_df["Collected"] / category_summary_df["Expected"] * 100).fillna(
-                            0).round(1)
+                        category_summary_df["Rate"] = (category_summary_df["Collected"] / category_summary_df["Expected"] * 100).fillna(0).round(1)
 
                         # Display in columns
                         cat_cols = st.columns(len(category_summary_df))
@@ -2034,10 +2001,9 @@ def main_app():
                     st.markdown("---")
 
                     # ========== TOP PERFORMING CLASSES ==========
-                    if class_summary_list:
+                    if class_summary_list and len(class_summary_df) > 0:
                         st.markdown("### 🏆 Top 5 Performing Classes")
-                        top_classes = class_summary_df.nlargest(5, "Rate")[
-                            ["Class", "Pupils", "Expected", "Collected", "Rate"]]
+                        top_classes = class_summary_df.nlargest(5, "Rate")[["Class", "Pupils", "Expected", "Collected", "Rate"]]
                         st.dataframe(
                             top_classes.style.format({
                                 "Expected": "UGX {:,.0f}",
