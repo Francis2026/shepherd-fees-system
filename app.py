@@ -1613,9 +1613,12 @@ def main_app():
                 is_archived = pupil.get("archived", False)
                 term_fees = pupil.get("term_fees", 0) or 0
                 is_sponsored = pupil.get("is_sponsored", False)
+                sponsor_reason = pupil.get("sponsor_reason", "")
                 pupil_type = pupil.get("pupil_type", "Community Child")
-                current_term_display = pupil.get('current_term', current_term)
-                current_year_display = pupil.get('current_year', current_year)
+
+                # Use CURRENT term/year instead of original enrollment
+                current_term_display = pupil.get('current_term') or current_term
+                current_year_display = pupil.get('current_year') or current_year
                 enrollment_info = f"{current_term_display} {current_year_display}"
 
                 previous_balance = manager.get_previous_term_balance(pupil_id, current_term, current_year) or 0
