@@ -1583,7 +1583,7 @@ def main_app():
             else:
                 st.error("Please enter pupil name")
 
-    # ------------------- PUPILS & LEDGERS -------------------
+    # ------------------- PUPILS & LEDGERS (FIXED) -------------------
     elif menu == "Pupils & Ledgers":
         st.markdown("<h1 style='color: #1E3A5F; font-size: 1.5rem;'>Pupils & Ledgers</h1>", unsafe_allow_html=True)
 
@@ -1611,61 +1611,50 @@ def main_app():
             for pupil in pupils:
                 pupil_id = pupil.get('id')
                 is_archived = pupil.get("archived", False)
-                term_fees = pupil.get("term_fees", 0)
+                term_fees = pupil.get("term_fees", 0) or 0
                 is_sponsored = pupil.get("is_sponsored", False)
-                sponsor_reason = pupil.get("sponsor_reason", "")
                 pupil_type = pupil.get("pupil_type", "Community Child")
                 enrollment_info = f"{pupil.get('enrollment_term', 'Term 1')} {pupil.get('enrollment_year', current_year)}"
 
-                # Get previous term balance (important for display)
-                previous_balance = manager.get_previous_term_balance(pupil_id, current_term, current_year)
-
-                # Get ledger entries (including opening balance if any)
+                previous_balance = manager.get_previous_term_balance(pupil_id, current_term, current_year) or 0
                 ledger_entries = manager.get_ledger(pupil_id, current_term, current_year)
 
-                # Calculate total paid this term (excluding opening balance entries which have amount=0)
-                total_paid_this_term = sum([p.get("amount", 0) for p in ledger_entries if p.get("amount", 0) > 0])
+                total_paid_this_term = sum(p.get("amount", 0) or 0 for p in ledger_entries if p.get("amount", 0) > 0)
 
-                if previous_balance is None:
-                    previous_balance = 0
-
-                # Calculate financials with previous balance
                 credit_amount = abs(previous_balance) if previous_balance < 0 else 0
                 debt_amount = previous_balance if previous_balance > 0 else 0
-
                 total_due = debt_amount + term_fees
                 current_balance = max(0, total_due - total_paid_this_term - credit_amount)
-
-                # Calculate remaining credit after applying to this term
                 remaining_credit = max(0, credit_amount - total_paid_this_term)
 
-                # Build transaction list for display
                 all_transactions = []
 
-                # Add opening balance if exists
-                opening_entries = [e for e in ledger_entries if
-                                   e.get("amount", 0) == 0 and "carried forward" in e.get("description", "").lower()]
+                # Opening balance entries
+                opening_entries = [e for e in ledger_entries
+                                   if e.get("amount", 0) == 0 and "carried forward" in str(
+                        e.get("description", "")).lower()]
                 for entry in opening_entries:
+                    bal = entry.get('balance') or 0
+                    excess = entry.get('excess_amount') or 0
                     all_transactions.append({
                         "S/No": 0,
-                        "Date": entry.get("payment_date", "")[:10] if entry.get("payment_date") else "",
+                        "Date": str(entry.get("payment_date", ""))[:10],
                         "Amount Paid": "UGX 0",
-                        "Credit Applied": f"UGX {entry.get('excess_amount', 0):,.0f}" if entry.get('excess_amount',
-                                                                                                   0) > 0 else "UGX 0",
-                        "Description": entry.get("description", ""),
-                        "Balance After": f"UGX {entry.get('balance', 0):,.0f}",
+                        "Credit Applied": f"UGX {excess:,.0f}" if excess > 0 else "UGX 0",
+                        "Description": entry.get("description", "Balance carried forward"),
+                        "Balance After": f"UGX {bal:,.0f}",
                         "Receipt No": entry.get("receipt_no", "")
                     })
 
-                # Add regular payments
+                # Regular payments
                 payment_entries = [e for e in ledger_entries if e.get("amount", 0) > 0]
                 for idx, entry in enumerate(payment_entries, len(all_transactions) + 1):
-                    amount = entry.get('amount', 0)
-                    balance = entry.get('balance', 0)
+                    amount = entry.get('amount', 0) or 0
+                    balance = entry.get('balance', 0) or 0
 
                     all_transactions.append({
                         "S/No": idx,
-                        "Date": entry.get("payment_date", "")[:10] if entry.get("payment_date") else "",
+                        "Date": str(entry.get("payment_date", ""))[:10],
                         "Amount Paid": f"UGX {amount:,.0f}",
                         "Credit Applied": "UGX 0",
                         "Description": entry.get("description", "Payment"),
@@ -1673,23 +1662,22 @@ def main_app():
                         "Receipt No": entry.get("receipt_no", "")
                     })
 
-                # Create expander title with previous balance info
+                # Expander Title
                 if is_archived:
                     expander_title = f"📌 {pupil['name']} — {pupil_type} — [ARCHIVED]"
                 elif is_sponsored:
                     expander_title = f"📌 {pupil['name']} — {pupil_type} — 🎓 SPONSORED"
                 else:
                     if previous_balance > 0:
-                        expander_title = f"📌 {pupil['name']} — {pupil_type} — ⚠️ Previous Debt: UGX {previous_balance:,.0f} | This Term: UGX {term_fees:,.0f} | Paid: UGX {total_paid_this_term:,.0f} | Balance: UGX {current_balance:,.0f}"
+                        expander_title = f"📌 {pupil['name']} — {pupil_type} — ⚠️ Prev Debt: UGX {previous_balance:,.0f} | This Term: UGX {term_fees:,.0f} | Paid: UGX {total_paid_this_term:,.0f} | Due: UGX {current_balance:,.0f}"
                     elif previous_balance < 0:
-                        expander_title = f"📌 {pupil['name']} — {pupil_type} — 💳 Previous Credit: UGX {abs(previous_balance):,.0f} | This Term: UGX {term_fees:,.0f} | Paid: UGX {total_paid_this_term:,.0f} | Balance: UGX {current_balance:,.0f}"
+                        expander_title = f"📌 {pupil['name']} — {pupil_type} — 💳 Prev Credit: UGX {abs(previous_balance):,.0f} | This Term: UGX {term_fees:,.0f} | Paid: UGX {total_paid_this_term:,.0f} | Due: UGX {current_balance:,.0f}"
                     else:
-                        expander_title = f"📌 {pupil['name']} — {pupil_type} — Fees: UGX {term_fees:,.0f} | Paid: UGX {total_paid_this_term:,.0f} | Balance: UGX {current_balance:,.0f}"
+                        expander_title = f"📌 {pupil['name']} — {pupil_type} — Fees: UGX {term_fees:,.0f} | Paid: UGX {total_paid_this_term:,.0f} | Due: UGX {current_balance:,.0f}"
 
                 with st.expander(expander_title):
-                    # Show previous balance prominently
                     if previous_balance > 0:
-                        st.warning(f"💰 **Previous Term Balance (Debt Carried Forward):** UGX {previous_balance:,.0f}")
+                        st.warning(f"💰 **Previous Term Debt Carried Forward:** UGX {previous_balance:,.0f}")
                     elif previous_balance < 0:
                         st.success(f"💳 **Previous Term Credit Carried Forward:** UGX {abs(previous_balance):,.0f}")
 
@@ -1699,8 +1687,7 @@ def main_app():
                     with col2:
                         st.caption(f"🏷️ Type: {pupil_type}")
                     with col3:
-                        if is_sponsored:
-                            st.caption(f"🙏 Reason: {sponsor_reason}")
+                        st.caption(f"💰 Term Fees: UGX {term_fees:,.0f}")
                     with col4:
                         if remaining_credit > 0:
                             st.success(f"💳 Remaining Credit: UGX {remaining_credit:,.0f}")
@@ -1709,12 +1696,11 @@ def main_app():
                         df = pd.DataFrame(all_transactions)
                         st.dataframe(df, use_container_width=True, height=min(400, 35 * len(df) + 38))
 
-                        # Receipt buttons for payment entries
                         if payment_entries:
                             st.markdown("---")
                             st.markdown("### 📄 Receipts")
                             for entry in payment_entries:
-                                if st.button(f"🖨️ Receipt {entry.get('receipt_no', '')[-12:]}",
+                                if st.button(f"🖨️ Receipt {str(entry.get('receipt_no', ''))[-12:]}",
                                              key=f"print_{entry.get('id', '')}"):
                                     pdf_buffer = generate_pdf_receipt(
                                         school_name="Shepherd Academy Busiu",
@@ -1733,7 +1719,7 @@ def main_app():
                                     st.download_button("📥 PDF", pdf_buffer,
                                                        f"Receipt_{entry.get('receipt_no', '')}.pdf", "application/pdf")
                     else:
-                        st.info(f"No payments for {current_term} {current_year}")
+                        st.info(f"No transactions yet for {current_term} {current_year}")
 
                     if role == "bursar" and not is_sponsored and not is_archived:
                         if st.button(f"💰 Record Payment for {pupil['name']}", key=f"pay_{pupil_id}",
