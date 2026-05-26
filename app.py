@@ -1401,7 +1401,7 @@ def main_app():
                     if initialized > 0:
                         st.success(f"✅ Initialized {initialized} existing pupils for {current_term} {current_year}")
                     time.sleep(0.5)
-                    st.rerun()
+                    # st.rerun()
 
         # Show enrollment dialog if flag is set
         if st.session_state.get("show_enrollment_dialog", False):
