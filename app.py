@@ -960,7 +960,7 @@ class FeesManager:
             return False
 
         try:
-            # Check if already enrolled in this term
+            # Check if already enrolled in target term
             existing = supabase.table("term_enrollments").select("*") \
                 .eq("pupil_id", pupil_id) \
                 .eq("term", to_term) \
@@ -968,17 +968,19 @@ class FeesManager:
                 .execute()
 
             if existing.data:
-                return True
+                return True  # Already enrolled
 
             # Get pupil details
             pupil = self.get_pupil_details(pupil_id)
             if not pupil:
+                st.error("Pupil not found")
                 return False
 
-            # Get previous term balance
-            previous_balance = self.get_term_closing_balance(pupil_id, from_term, from_year)
+            # Get previous term closing balance
+            previous_balance = self.get_previous_term_balance(pupil_id, to_term, to_year)
+            term_fees = pupil.get("term_fees", 0) or 0
 
-            # Enroll in term
+            # Enroll in new term
             supabase.table("term_enrollments").insert({
                 "pupil_id": pupil_id,
                 "term": to_term,
@@ -987,22 +989,19 @@ class FeesManager:
                 "enrolled_at": datetime.datetime.now().isoformat()
             }).execute()
 
-            # Update pupil's current term
+            # Update pupil's current term/year
             supabase.table("pupils").update({
                 "current_term": to_term,
                 "current_year": to_year
             }).eq("id", pupil_id).execute()
 
-            # If there's a balance (positive or negative), create an opening balance record
+            # === CREATE CARRY-FORWARD RECORD IF NEEDED ===
             if previous_balance != 0:
-                term_fees = pupil.get("term_fees", 0)
                 opening_id = str(uuid.uuid4())
                 receipt_no = f"BAL-CF-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-                source_desc = f"{from_term} {from_year}"
-
                 if previous_balance < 0:
-                    # Credit balance
+                    # Credit carried forward
                     credit_amount = abs(previous_balance)
                     supabase.table("payments").insert({
                         "id": opening_id,
@@ -1010,7 +1009,7 @@ class FeesManager:
                         "term": to_term,
                         "year": int(to_year),
                         "amount": 0,
-                        "description": f"Credit carried forward from {source_desc} (UGX {credit_amount:,.0f})",
+                        "description": f"Credit carried forward from {from_term} {from_year} (UGX {credit_amount:,.0f})",
                         "balance": previous_balance,
                         "previous_balance": 0,
                         "term_fees": term_fees,
@@ -1019,14 +1018,14 @@ class FeesManager:
                         "payment_date": datetime.datetime.now().isoformat()
                     }).execute()
                 else:
-                    # Debt balance
+                    # Debt carried forward
                     supabase.table("payments").insert({
                         "id": opening_id,
                         "pupil_id": pupil_id,
                         "term": to_term,
                         "year": int(to_year),
                         "amount": 0,
-                        "description": f"Balance carried forward from {source_desc}",
+                        "description": f"Balance carried forward from {from_term} {from_year}",
                         "balance": previous_balance,
                         "previous_balance": previous_balance,
                         "term_fees": term_fees,
@@ -1039,9 +1038,11 @@ class FeesManager:
             cache.invalidate(data_type="ledger")
             cache.invalidate(data_type="summary")
             cache.invalidate(data_type="enrollments")
+
             return True
+
         except Exception as e:
-            st.error(f"Error enrolling pupil into term: {str(e)}")
+            st.error(f"Error enrolling pupil into new term: {str(e)}")
             return False
 
     def add_payment(self, pupil_id, term, year, amount, description):
