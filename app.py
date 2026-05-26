@@ -1358,7 +1358,7 @@ def main_app():
                                        step=1)
 
         st.markdown("---")
-
+        manager = FeesManager()
         # Term Enrollment Section
         if role == "bursar":
             st.markdown("### 📋 Term Enrollment")
@@ -1385,11 +1385,31 @@ def main_app():
                 st.session_state.enroll_to_term = current_term
                 st.session_state.enroll_to_year = current_year
                 st.rerun()
+
             st.markdown("---")
 
+            # === FORCE CARRY FORWARD BUTTON ===
+            if st.button("🔧 Force Carry Forward + Update Current Term",
+                        type="secondary", use_container_width=True):
+                with st.spinner("Updating pupils and carrying forward balances..."):
+                    count = 0
+                    all_pupils = manager.get_pupils_for_term("All Classes", current_term, current_year)
+                    for pupil in all_pupils:
+                        success = manager.enroll_pupil_into_term(
+                            pupil['id'],
+                            current_term,
+                            current_year,
+                            prev_term,
+                            prev_year
+                        )
+                        if success:
+                            count += 1
+                    st.success(f"✅ Successfully processed {count} pupils with balance carry-forward")
+                    cache.clear_all()
+                    st.rerun()
 
 
-        manager = FeesManager()
+
 
         # Initialize term data for the CURRENT term only
         if role == "bursar":
