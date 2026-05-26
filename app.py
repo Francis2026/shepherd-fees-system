@@ -15,6 +15,7 @@ import base64
 import time
 from datetime import timedelta
 import json
+from supabase.lib.client_options import ClientOptions
 
 # Import Supabase
 from supabase import create_client
@@ -333,12 +334,18 @@ def init_supabase():
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
 
-        client = create_client(url, key)
+        # Use ClientOptions for better configuration
+        from supabase.lib.client_options import ClientOptions
 
-        # Improve stability
-        client.postgrest.client.options = {"timeout": 60}
+        options = ClientOptions(
+            postgrest_client_timeout=60,  # 60 seconds timeout
+            storage_client_timeout=60,
+            schema="public"
+        )
 
-        # Light connection test
+        client = create_client(url, key, options=options)
+
+        # Light test connection
         client.table("pupils").select("id").limit(1).execute()
 
         return client
