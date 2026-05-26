@@ -558,7 +558,7 @@ CLASS_PROGRESSION = {
 TERM_ORDER = ["Term 1", "Term 2", "Term 3"]
 
 
-# ==================== SUPABASE FEES MANAGER ====================
+# ==================== SUPABASE FEES MANAGER (COMPLETELY FIXED) ====================
 class FeesManager:
     def __init__(self):
         self.classes = list(CLASS_PROGRESSION.keys())
@@ -612,10 +612,12 @@ class FeesManager:
         return [p for p in all_pupils if p.get("class") == class_name]
 
     def get_pupils_for_term(self, class_name, term, year, include_archived=False):
+        """ONLY show pupils who are ENROLLED in this specific term via term_enrollments table"""
         if supabase is None:
             return []
 
         try:
+            # First, get all pupils enrolled in this term from term_enrollments
             result = supabase.table("term_enrollments") \
                 .select("pupil_id, pupils(*)") \
                 .eq("term", term) \
@@ -627,17 +629,11 @@ class FeesManager:
             for item in result.data:
                 pupil = item.get("pupils", {})
                 if pupil:
-                    if pupil.get("class") == class_name or class_name == "All Classes":
+                    # Check if class matches
+                    if class_name == "All Classes" or pupil.get("class") == class_name:
                         if not include_archived and pupil.get("archived", False):
                             continue
                         pupils.append(pupil)
-
-            all_pupils = self.get_all_pupils(include_archived)
-            for pupil in all_pupils:
-                if pupil.get("enrollment_term") == term and pupil.get("enrollment_year") == year:
-                    if pupil.get("class") == class_name or class_name == "All Classes":
-                        if pupil not in pupils:
-                            pupils.append(pupil)
 
             return pupils
         except Exception as e:
@@ -645,6 +641,7 @@ class FeesManager:
             return []
 
     def get_previous_term_balance(self, pupil_id, current_term, current_year):
+        """Get the closing balance from the previous term"""
         term_order = self.term_order
         current_order = term_order.get(current_term, 1)
 
@@ -679,7 +676,6 @@ class FeesManager:
                 # If balance is 0 but there's excess, return negative excess (credit)
                 if balance == 0 and excess > 0:
                     return -excess
-                # Otherwise return the balance (positive = debt, negative = credit)
                 return balance if balance is not None else 0
             return 0
         except:
@@ -708,6 +704,7 @@ class FeesManager:
             return []
 
     def enroll_pupil(self, name, class_name, term_fees, pupil_type, current_term, current_year):
+        """Enroll a NEW pupil - automatically enrolls them in the current term"""
         if supabase is None:
             st.error("Database not connected")
             return None
@@ -744,6 +741,7 @@ class FeesManager:
 
             supabase.table("pupils").insert(pupil_data).execute()
 
+            # Enroll in current term
             supabase.table("term_enrollments").insert({
                 "pupil_id": pupil_id,
                 "term": current_term,
@@ -855,59 +853,78 @@ class FeesManager:
             return False
 
     def enroll_pupil_into_term(self, pupil_id, term, year):
-        """Enroll a pupil into a specific term and carry forward previous balance"""
+        """Enroll a pupil from previous term into current term with balance carry-forward"""
         if supabase is None:
             return False
 
         try:
-            # First, get the pupil's current details
+            # Check if already enrolled in this term
+            existing = supabase.table("term_enrollments").select("*") \
+                .eq("pupil_id", pupil_id) \
+                .eq("term", term) \
+                .eq("year", year) \
+                .execute()
+
+            if existing.data:
+                return True  # Already enrolled
+
+            # Get pupil details
             pupil = self.get_pupil_details(pupil_id)
             if not pupil:
                 return False
 
-            # Get the previous term balance (this will be negative if credit, positive if debt)
+            # Get previous term balance
             previous_balance = self.get_previous_term_balance(pupil_id, term, year)
 
-            # Insert into term_enrollments
+            # Enroll in term
             supabase.table("term_enrollments").insert({
                 "pupil_id": pupil_id,
                 "term": term,
                 "year": year,
-                "is_active": True
+                "is_active": True,
+                "enrolled_at": datetime.datetime.now().isoformat()
             }).execute()
 
-            # Update pupil's current term and year
+            # Update pupil's current term
             supabase.table("pupils").update({
                 "current_term": term,
                 "current_year": year
             }).eq("id", pupil_id).execute()
 
-            # If there's a previous balance (debt), create an opening balance entry in payments
+            # If there's a positive balance (debt), create an opening balance record
             if previous_balance > 0:
-                # Create an opening balance record for this term
-                opening_balance_id = str(uuid.uuid4())
+                term_fees = pupil.get("term_fees", 0)
+                opening_id = str(uuid.uuid4())
                 receipt_no = f"OPEN-BAL-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
 
+                # Get the term order to create description
+                term_order = self.term_order
+                current_order = term_order.get(term, 1)
+                if current_order == 1:
+                    source_term = f"Term 3, {year - 1}"
+                elif current_order == 2:
+                    source_term = f"Term 1, {year}"
+                else:
+                    source_term = f"Term 2, {year}"
+
                 supabase.table("payments").insert({
-                    "id": opening_balance_id,
+                    "id": opening_id,
                     "pupil_id": pupil_id,
                     "term": term,
                     "year": int(year),
                     "amount": 0,
-                    "description": f"Opening balance carried forward from previous term",
+                    "description": f"Opening balance carried forward from {source_term}",
                     "balance": previous_balance,
                     "previous_balance": previous_balance,
-                    "term_fees": pupil.get("term_fees", 0),
+                    "term_fees": term_fees,
                     "receipt_no": receipt_no,
                     "excess_amount": 0,
                     "payment_date": datetime.datetime.now().isoformat()
                 }).execute()
 
-            # If there's a credit (negative balance), it will be handled by get_previous_term_balance
-            # which returns a negative value, and the payment system will apply it as credit
-
             cache.invalidate(data_type="pupils")
             cache.invalidate(data_type="ledger")
+            cache.invalidate(data_type="summary")
             return True
         except Exception as e:
             st.error(f"Error enrolling pupil into term: {str(e)}")
@@ -929,6 +946,7 @@ class FeesManager:
             data = result.data
             cache.invalidate(data_type="stats")
             cache.invalidate(data_type="summary")
+            cache.invalidate(data_type="ledger")
 
             return (data.get('payment_id'), data.get('new_balance'),
                     data.get('receipt_no'), data.get('previous_balance'),
@@ -1021,10 +1039,22 @@ class FeesManager:
             }
 
         try:
-            all_pupils = self.get_all_pupils(include_archived=False)
+            # Get pupils enrolled in this specific term
+            enrolled_pupils = []
+            result = supabase.table("term_enrollments") \
+                .select("pupil_id, pupils(*)") \
+                .eq("term", term) \
+                .eq("year", int(year)) \
+                .eq("is_active", True) \
+                .execute()
+
+            for item in result.data:
+                pupil = item.get("pupils", {})
+                if pupil and not pupil.get("archived", False):
+                    enrolled_pupils.append(pupil)
 
             stats = {
-                "total_pupils": len(all_pupils),
+                "total_pupils": len(enrolled_pupils),
                 "staff_children": 0,
                 "shepherd_children": 0,
                 "community_children": 0,
@@ -1034,7 +1064,7 @@ class FeesManager:
                 "collection_rate": 0
             }
 
-            for pupil in all_pupils:
+            for pupil in enrolled_pupils:
                 pupil_type = pupil.get("pupil_type", "Community Child")
                 term_fees = pupil.get("term_fees", 0)
                 is_sponsored = pupil.get("is_sponsored", False)
@@ -1051,6 +1081,7 @@ class FeesManager:
 
                 stats["total_expected"] += term_fees
 
+                # Get total paid for this term
                 result = supabase.table("payments").select("amount") \
                     .eq("pupil_id", pupil.get("id")) \
                     .eq("term", term) \
@@ -1078,7 +1109,6 @@ class FeesManager:
                 "total_balance": 0,
                 "collection_rate": 0
             }
-
 
 # ==================== AUTHENTICATION ====================
 def authenticate_user(username, password):
