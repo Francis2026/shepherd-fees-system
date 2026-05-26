@@ -1388,13 +1388,16 @@ def main_app():
 
             st.markdown("---")
 
-            # === FORCE CARRY FORWARD BUTTON ===
-            if st.button("🔧 Force Carry Forward + Update Current Term",
-                        type="secondary", use_container_width=True):
-                with st.spinner("Updating pupils and carrying forward balances..."):
+            # === ADVANCED DEBUG BUTTON ===
+            if st.button("🔍 Advanced Force Carry Forward + Debug",
+                         type="primary", use_container_width=True):
+                with st.spinner("Forcing full update..."):
                     count = 0
+                    updated_list = []
                     all_pupils = manager.get_pupils_for_term("All Classes", current_term, current_year)
+
                     for pupil in all_pupils:
+                        pupil_name = pupil.get('name', 'Unknown')
                         success = manager.enroll_pupil_into_term(
                             pupil['id'],
                             current_term,
@@ -1404,7 +1407,13 @@ def main_app():
                         )
                         if success:
                             count += 1
-                    st.success(f"✅ Successfully processed {count} pupils with balance carry-forward")
+                            updated_list.append(pupil_name)
+
+                    st.success(f"✅ Processed {count} pupils")
+                    if updated_list:
+                        st.write("Updated pupils:", updated_list[:5])  # Show first 5
+
+                    # Force refresh
                     cache.clear_all()
                     st.rerun()
 
