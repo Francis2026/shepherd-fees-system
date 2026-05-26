@@ -662,6 +662,7 @@ class FeesManager:
             return 0
 
         try:
+            # Get the last payment of the previous term to get the closing balance
             result = supabase.table("payments").select("balance, excess_amount") \
                 .eq("pupil_id", pupil_id) \
                 .eq("term", prev_term) \
@@ -674,8 +675,11 @@ class FeesManager:
                 last_entry = result.data[0]
                 balance = last_entry.get("balance", 0)
                 excess = last_entry.get("excess_amount", 0)
+
+                # If balance is 0 but there's excess, return negative excess (credit)
                 if balance == 0 and excess > 0:
                     return -excess
+                # Otherwise return the balance (positive = debt, negative = credit)
                 return balance if balance is not None else 0
             return 0
         except:
@@ -851,17 +855,59 @@ class FeesManager:
             return False
 
     def enroll_pupil_into_term(self, pupil_id, term, year):
+        """Enroll a pupil into a specific term and carry forward previous balance"""
         if supabase is None:
             return False
 
         try:
+            # First, get the pupil's current details
+            pupil = self.get_pupil_details(pupil_id)
+            if not pupil:
+                return False
+
+            # Get the previous term balance (this will be negative if credit, positive if debt)
+            previous_balance = self.get_previous_term_balance(pupil_id, term, year)
+
+            # Insert into term_enrollments
             supabase.table("term_enrollments").insert({
                 "pupil_id": pupil_id,
                 "term": term,
                 "year": year,
                 "is_active": True
             }).execute()
+
+            # Update pupil's current term and year
+            supabase.table("pupils").update({
+                "current_term": term,
+                "current_year": year
+            }).eq("id", pupil_id).execute()
+
+            # If there's a previous balance (debt), create an opening balance entry in payments
+            if previous_balance > 0:
+                # Create an opening balance record for this term
+                opening_balance_id = str(uuid.uuid4())
+                receipt_no = f"OPEN-BAL-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
+
+                supabase.table("payments").insert({
+                    "id": opening_balance_id,
+                    "pupil_id": pupil_id,
+                    "term": term,
+                    "year": int(year),
+                    "amount": 0,
+                    "description": f"Opening balance carried forward from previous term",
+                    "balance": previous_balance,
+                    "previous_balance": previous_balance,
+                    "term_fees": pupil.get("term_fees", 0),
+                    "receipt_no": receipt_no,
+                    "excess_amount": 0,
+                    "payment_date": datetime.datetime.now().isoformat()
+                }).execute()
+
+            # If there's a credit (negative balance), it will be handled by get_previous_term_balance
+            # which returns a negative value, and the payment system will apply it as credit
+
             cache.invalidate(data_type="pupils")
+            cache.invalidate(data_type="ledger")
             return True
         except Exception as e:
             st.error(f"Error enrolling pupil into term: {str(e)}")
