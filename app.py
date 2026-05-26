@@ -327,12 +327,21 @@ st.markdown("""
 
 
 # ==================== SUPABASE INITIALIZATION ====================
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def init_supabase():
     try:
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
-        return create_client(url, key)
+
+        client = create_client(url, key)
+
+        # Improve stability
+        client.postgrest.client.options = {"timeout": 60}
+
+        # Light connection test
+        client.table("pupils").select("id").limit(1).execute()
+
+        return client
     except Exception as e:
         st.error(f"Supabase connection error: {str(e)}")
         return None
@@ -1142,45 +1151,28 @@ class FeesManager:
             return cached
 
         if supabase is None:
-            return {
-                "total_pupils": 0,
-                "staff_children": 0,
-                "shepherd_children": 0,
-                "community_children": 0,
-                "total_expected": 0,
-                "total_collected": 0,
-                "total_balance": 0,
-                "collection_rate": 0
-            }
+            return self._empty_stats()
 
         try:
-            enrolled_pupils = []
+            # More efficient query
             result = supabase.table("term_enrollments") \
-                .select("pupil_id, pupils(*)") \
+                .select("pupil_id, pupils!inner(*)") \
                 .eq("term", term) \
                 .eq("year", int(year)) \
                 .eq("is_active", True) \
                 .execute()
 
-            for item in result.data:
-                pupil = item.get("pupils", {})
-                if pupil and not pupil.get("archived", False):
-                    enrolled_pupils.append(pupil)
+            enrolled_pupils = [item.get("pupils", {}) for item in result.data if item.get("pupils")]
 
-            stats = {
-                "total_pupils": len(enrolled_pupils),
-                "staff_children": 0,
-                "shepherd_children": 0,
-                "community_children": 0,
-                "total_expected": 0,
-                "total_collected": 0,
-                "total_balance": 0,
-                "collection_rate": 0
-            }
+            stats = self._empty_stats()
+            stats["total_pupils"] = len(enrolled_pupils)
 
             for pupil in enrolled_pupils:
+                if not pupil or pupil.get("archived", False):
+                    continue
+
                 pupil_type = pupil.get("pupil_type", "Community Child")
-                term_fees = pupil.get("term_fees", 0)
+                term_fees = pupil.get("term_fees", 0) or 0
                 is_sponsored = pupil.get("is_sponsored", False)
 
                 if is_sponsored:
@@ -1195,35 +1187,41 @@ class FeesManager:
 
                 stats["total_expected"] += term_fees
 
-                # Get total paid for this term (excluding opening balance entries)
-                result = supabase.table("payments").select("amount") \
-                    .eq("pupil_id", pupil.get("id")) \
-                    .eq("term", term) \
-                    .eq("year", int(year)) \
-                    .neq("amount", 0) \
-                    .execute()
-
-                total_paid = sum([p.get("amount", 0) for p in result.data])
-                stats["total_collected"] += total_paid
+                # Safe payment query
+                try:
+                    payments = supabase.table("payments").select("amount") \
+                        .eq("pupil_id", pupil.get("id")) \
+                        .eq("term", term) \
+                        .eq("year", int(year)) \
+                        .neq("amount", 0) \
+                        .execute()
+                    total_paid = sum(p.get("amount", 0) or 0 for p in payments.data)
+                    stats["total_collected"] += total_paid
+                except:
+                    pass  # Continue even if one pupil fails
 
             stats["total_balance"] = stats["total_expected"] - stats["total_collected"]
             if stats["total_expected"] > 0:
-                stats["collection_rate"] = (stats["total_collected"] / stats["total_expected"]) * 100
+                stats["collection_rate"] = round((stats["total_collected"] / stats["total_expected"]) * 100, 1)
 
             cache.set(cache_key, stats, "stats")
             return stats
+
         except Exception as e:
             st.error(f"Error getting dashboard stats: {str(e)}")
-            return {
-                "total_pupils": 0,
-                "staff_children": 0,
-                "shepherd_children": 0,
-                "community_children": 0,
-                "total_expected": 0,
-                "total_collected": 0,
-                "total_balance": 0,
-                "collection_rate": 0
-            }
+            return self._empty_stats()
+
+    def _empty_stats(self):
+        return {
+            "total_pupils": 0,
+            "staff_children": 0,
+            "shepherd_children": 0,
+            "community_children": 0,
+            "total_expected": 0,
+            "total_collected": 0,
+            "total_balance": 0,
+            "collection_rate": 0
+        }
 
 
 # ==================== AUTHENTICATION ====================
