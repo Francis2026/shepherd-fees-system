@@ -39,6 +39,7 @@ if "app_initialized" not in st.session_state:
     st.session_state.show_enrollment_dialog = False
     st.session_state.quick_pay_pupil = None
     st.session_state.quick_pay_name = ""
+    st.session_state.term_data_initialized = False
 
 # ------------------- Modern Color Scheme -------------------
 COLORS = {
@@ -349,6 +350,7 @@ class SmartCache:
             "ledger": 300,
             "stats": 600,
             "summary": 900,
+            "enrollments": 600,
         }
 
     def get(self, key, data_type="pupils"):
@@ -444,7 +446,6 @@ def generate_pdf_receipt(school_name, logo_path, receipt_num, date_str, child_na
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
-    # Ensure values are numbers (not None)
     previous_balance = previous_balance if previous_balance is not None else 0
     term_fees = term_fees if term_fees is not None else 0
     balance = balance if balance is not None else 0
@@ -611,13 +612,29 @@ class FeesManager:
         all_pupils = self.get_all_pupils(include_archived)
         return [p for p in all_pupils if p.get("class") == class_name]
 
+    def is_pupil_enrolled_in_term(self, pupil_id, term, year):
+        """Check if a pupil is enrolled in a specific term"""
+        if supabase is None:
+            return False
+
+        try:
+            result = supabase.table("term_enrollments").select("id") \
+                .eq("pupil_id", pupil_id) \
+                .eq("term", term) \
+                .eq("year", year) \
+                .eq("is_active", True) \
+                .execute()
+            return len(result.data) > 0
+        except:
+            return False
+
     def get_pupils_for_term(self, class_name, term, year, include_archived=False):
         """ONLY show pupils who are ENROLLED in this specific term via term_enrollments table"""
         if supabase is None:
             return []
 
         try:
-            # First, get all pupils enrolled in this term from term_enrollments
+            # Get all pupils enrolled in this term from term_enrollments
             result = supabase.table("term_enrollments") \
                 .select("pupil_id, pupils(*)") \
                 .eq("term", term) \
@@ -746,11 +763,13 @@ class FeesManager:
                 "pupil_id": pupil_id,
                 "term": current_term,
                 "year": current_year,
-                "is_active": True
+                "is_active": True,
+                "enrolled_at": datetime.datetime.now().isoformat()
             }).execute()
 
             cache.invalidate(data_type="pupils")
             cache.invalidate(data_type="stats")
+            cache.invalidate(data_type="enrollments")
             return pupil_id
         except Exception as e:
             st.error(f"Error enrolling pupil: {str(e)}")
@@ -812,6 +831,10 @@ class FeesManager:
             return False
 
         try:
+            # Deactivate all term enrollments
+            supabase.table("term_enrollments").update({"is_active": False}) \
+                .eq("pupil_id", pupil_id).execute()
+
             supabase.table("pupils").update({
                 "active": False,
                 "archived": True,
@@ -821,6 +844,7 @@ class FeesManager:
 
             cache.invalidate(data_type="pupils")
             cache.invalidate(f"pupil_{pupil_id}")
+            cache.invalidate(data_type="enrollments")
             return True
         except Exception as e:
             st.error(f"Error archiving pupil: {str(e)}")
@@ -842,15 +866,55 @@ class FeesManager:
                 "pupil_id": pupil_id,
                 "term": return_term,
                 "year": return_year,
-                "is_active": True
+                "is_active": True,
+                "enrolled_at": datetime.datetime.now().isoformat()
             }).execute()
 
             cache.invalidate(data_type="pupils")
             cache.invalidate(f"pupil_{pupil_id}")
+            cache.invalidate(data_type="enrollments")
             return True
         except Exception as e:
             st.error(f"Error restoring pupil: {str(e)}")
             return False
+
+    def initialize_existing_pupils_for_term(self, term, year):
+        """CRITICAL: Initialize all existing pupils for a specific term"""
+        if supabase is None:
+            return 0
+
+        try:
+            # Get all active, non-archived pupils
+            pupils = self.get_all_pupils(include_archived=False)
+            initialized_count = 0
+
+            for pupil in pupils:
+                # Check if already enrolled in this term
+                existing = supabase.table("term_enrollments").select("*") \
+                    .eq("pupil_id", pupil["id"]) \
+                    .eq("term", term) \
+                    .eq("year", year) \
+                    .execute()
+
+                if not existing.data:
+                    # Create enrollment record
+                    supabase.table("term_enrollments").insert({
+                        "pupil_id": pupil["id"],
+                        "term": term,
+                        "year": year,
+                        "is_active": True,
+                        "enrolled_at": datetime.datetime.now().isoformat()
+                    }).execute()
+                    initialized_count += 1
+
+            if initialized_count > 0:
+                cache.invalidate(data_type="enrollments")
+                cache.invalidate(data_type="stats")
+
+            return initialized_count
+        except Exception as e:
+            st.error(f"Error initializing term data: {str(e)}")
+            return 0
 
     def enroll_pupil_into_term(self, pupil_id, term, year):
         """Enroll a pupil from previous term into current term with balance carry-forward"""
@@ -897,7 +961,6 @@ class FeesManager:
                 opening_id = str(uuid.uuid4())
                 receipt_no = f"OPEN-BAL-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-                # Get the term order to create description
                 term_order = self.term_order
                 current_order = term_order.get(term, 1)
                 if current_order == 1:
@@ -925,6 +988,7 @@ class FeesManager:
             cache.invalidate(data_type="pupils")
             cache.invalidate(data_type="ledger")
             cache.invalidate(data_type="summary")
+            cache.invalidate(data_type="enrollments")
             return True
         except Exception as e:
             st.error(f"Error enrolling pupil into term: {str(e)}")
@@ -1110,6 +1174,7 @@ class FeesManager:
                 "collection_rate": 0
             }
 
+
 # ==================== AUTHENTICATION ====================
 def authenticate_user(username, password):
     if supabase is None:
@@ -1276,6 +1341,16 @@ def main_app():
 
         manager = FeesManager()
 
+        # CRITICAL FIX: Initialize term data for existing pupils on first load
+        if role == "bursar" and not st.session_state.get("term_data_initialized", False):
+            with st.spinner(f"Initializing term data for {current_term} {current_year}..."):
+                initialized = manager.initialize_existing_pupils_for_term(current_term, current_year)
+                if initialized > 0:
+                    st.success(f"✅ Initialized {initialized} existing pupils for {current_term} {current_year}")
+                st.session_state.term_data_initialized = True
+                time.sleep(1)
+                st.rerun()
+
         # Show enrollment dialog if flag is set
         if st.session_state.get("show_enrollment_dialog", False):
             with st.expander("📋 Enroll Pupils", expanded=True):
@@ -1290,15 +1365,11 @@ def main_app():
                 selected_pupils = []
                 for pupil in prev_pupils:
                     # Check if already enrolled
-                    try:
-                        result = supabase.table("term_enrollments").select("*") \
-                            .eq("pupil_id", pupil.get("id")) \
-                            .eq("term", st.session_state.enroll_to_term) \
-                            .eq("year", st.session_state.enroll_to_year) \
-                            .execute()
-                        already_enrolled = len(result.data) > 0
-                    except:
-                        already_enrolled = False
+                    already_enrolled = manager.is_pupil_enrolled_in_term(
+                        pupil.get("id"),
+                        st.session_state.enroll_to_term,
+                        st.session_state.enroll_to_year
+                    )
 
                     if already_enrolled:
                         st.info(f"✅ {pupil['name']} ({pupil['class']}) - Already enrolled")
@@ -1330,7 +1401,7 @@ def main_app():
             st.session_state.show_archived = show_archived
 
         if st.button("🚪 Logout", key="logout_btn", use_container_width=True):
-            for key in ["logged_in", "username", "role", "navigation_menu", "show_archived"]:
+            for key in ["logged_in", "username", "role", "navigation_menu", "show_archived", "term_data_initialized"]:
                 if key in st.session_state:
                     del st.session_state[key]
             cache.clear_all()
@@ -1497,7 +1568,6 @@ def main_app():
                 ledger_entries = manager.get_ledger(pupil_id, current_term, current_year)
                 total_paid_this_term = sum([p.get("amount", 0) for p in ledger_entries])
 
-                # Handle None values
                 if previous_balance is None:
                     previous_balance = 0
 
@@ -1522,7 +1592,6 @@ def main_app():
                     else:
                         source_term = f"Term 2, {current_year}"
 
-                    # Ensure values are numbers (not None)
                     credit_amt = credit_amount if credit_amount is not None else 0
                     total_due_amt = total_due if total_due is not None else 0
 
@@ -1537,7 +1606,6 @@ def main_app():
                     })
 
                 for idx, entry in enumerate(ledger_entries, 1):
-                    # Safely get values, ensuring they are numbers
                     amount = entry.get('amount', 0)
                     if amount is None:
                         amount = 0
@@ -1621,10 +1689,13 @@ def main_app():
         st.markdown("<h1 style='color: #1E3A5F; font-size: 1.5rem;'>Record Payment</h1>", unsafe_allow_html=True)
         st.caption(f"Recording for: **{current_term} {current_year}**")
 
-        all_pupils = manager.get_all_pupils(include_archived=False)
+        # Get only pupils enrolled in this term
+        all_enrolled_pupils = manager.get_pupils_for_term("All Classes", current_term, current_year,
+                                                          include_archived=False)
 
-        if not all_pupils:
-            st.warning("No active pupils found.")
+        if not all_enrolled_pupils:
+            st.warning(
+                f"No pupils are enrolled for {current_term} {current_year}. Please use the Term Enrollment section to enroll pupils.")
         else:
             col_filter1, col_filter2 = st.columns([1, 2])
             with col_filter1:
@@ -1633,7 +1704,7 @@ def main_app():
             with col_filter2:
                 search_term = st.text_input("Search by Name", placeholder="Type name...", key="search_payment_pupil")
 
-            pupil_dicts = [p for p in all_pupils if p.get("active", True) and not p.get("archived", False)]
+            pupil_dicts = [p for p in all_enrolled_pupils if not p.get("archived", False)]
 
             if filter_class != "All Classes":
                 pupil_dicts = [p for p in pupil_dicts if p.get("class") == filter_class]
@@ -1672,7 +1743,6 @@ def main_app():
                         existing_payments = manager.get_ledger(pupil_id, current_term, current_year)
                         total_paid_this_term = sum([p.get("amount", 0) for p in existing_payments])
 
-                        # Handle None values
                         if previous_balance is None:
                             previous_balance = 0
 
@@ -1803,11 +1873,9 @@ def main_app():
             if not df_to_show.empty:
                 st.dataframe(df_to_show, use_container_width=True)
 
-                # ========== CLASS SUMMARY STATISTICS ==========
                 st.markdown("---")
                 st.markdown("### 📊 Class Summary Statistics")
 
-                # Filter out archived pupils for financial stats
                 if report_type == "Archived Only":
                     financial_df = df_archived
                 else:
@@ -1815,7 +1883,6 @@ def main_app():
                         df_full["status"] != "Archived (Left School)"] if not df_full.empty else pd.DataFrame()
 
                 if not financial_df.empty:
-                    # Use correct column names
                     total_pupils = len(financial_df)
                     total_expected = financial_df["term_fees"].sum() if "term_fees" in financial_df.columns else 0
                     total_paid = financial_df["total_paid"].sum() if "total_paid" in financial_df.columns else 0
@@ -1828,7 +1895,6 @@ def main_app():
 
                     collection_rate = (total_paid / total_expected * 100) if total_expected > 0 else 0
 
-                    # Display metrics using custom HTML (smaller fonts)
                     col_a, col_b, col_c, col_d, col_e, col_f = st.columns(6)
 
                     with col_a:
@@ -1884,8 +1950,6 @@ def main_app():
                         st.caption(f"📈 Progress: {collection_rate:.1f}%")
 
                     st.markdown("---")
-
-                    # ========== BREAKDOWN BY PUPIL TYPE ==========
                     st.markdown("#### 👥 Breakdown by Pupil Type")
 
                     if "pupil_type" in financial_df.columns:
@@ -1958,8 +2022,6 @@ def main_app():
             df_all, df_staff, df_shepherd, df_community = manager.get_school_wide_summary(
                 current_term, current_year, include_archived=st.session_state.show_archived)
 
-
-            # Apply filters
             if filter_class != "All Classes" and not df_all.empty:
                 if "Class" in df_all.columns:
                     df_all = df_all[df_all["Class"] == filter_class]
@@ -1973,9 +2035,7 @@ def main_app():
             else:
                 df_to_show = df_all
 
-            # Apply status filter - try different possible column names
             if not df_to_show.empty and filter_status != "All":
-                # Check what column name exists
                 status_col = None
                 for col in ["Status", "status", "STATUS"]:
                     if col in df_to_show.columns:
@@ -1993,11 +2053,9 @@ def main_app():
             if not df_to_show.empty:
                 st.dataframe(df_to_show, use_container_width=True)
 
-                # ========== SCHOOL SUMMARY STATISTICS ==========
                 st.markdown("---")
                 st.markdown("### 📊 School-Wide Summary Statistics")
 
-                # Add custom CSS for smaller metrics
                 st.markdown("""
                 <style>
                     div[data-testid="stMetric"] {
@@ -2017,7 +2075,6 @@ def main_app():
                 </style>
                 """, unsafe_allow_html=True)
 
-                # Filter out archived - find the correct column name
                 financial_df = df_to_show.copy()
                 if "Status" in financial_df.columns:
                     financial_df = financial_df[financial_df["Status"] != "Archived (Left School)"]
@@ -2025,7 +2082,6 @@ def main_app():
                     financial_df = financial_df[financial_df["status"] != "Archived (Left School)"]
 
                 if not financial_df.empty:
-                    # Determine column names dynamically
                     term_fees_col = "Term Fees (UGX)" if "Term Fees (UGX)" in financial_df.columns else "term_fees"
                     total_paid_col = "Total Paid (UGX)" if "Total Paid (UGX)" in financial_df.columns else "total_paid"
                     balance_col = "Balance (UGX)" if "Balance (UGX)" in financial_df.columns else "balance"
@@ -2033,19 +2089,16 @@ def main_app():
                     pupil_type_col = "Pupil Type" if "Pupil Type" in financial_df.columns else "pupil_type"
                     status_col_final = "Status" if "Status" in financial_df.columns else "status"
 
-                    # Calculate totals
                     total_pupils = len(financial_df)
                     total_expected = financial_df[term_fees_col].sum()
                     total_paid = financial_df[total_paid_col].sum()
                     total_balance = financial_df[balance_col].sum()
 
-                    # Count cleared/not cleared
                     cleared_count = len(financial_df[financial_df[status_col_final] == "Cleared"])
                     not_cleared_count = len(financial_df[financial_df[status_col_final] == "Not Cleared"])
 
                     collection_rate = (total_paid / total_expected * 100) if total_expected > 0 else 0
 
-                    # Display metrics
                     col_a, col_b, col_c, col_d, col_e, col_f = st.columns(6)
                     with col_a:
                         st.metric("📚 Pupils", total_pupils)
@@ -2065,11 +2118,8 @@ def main_app():
                         st.caption(f"📈 Collection Rate: {collection_rate:.1f}%")
 
                     st.markdown("---")
-
-                    # ========== PERFORMANCE BY CLASS ==========
                     st.markdown("### 🏫 Performance by Class")
 
-                    # Build class summary manually
                     class_summary_list = []
                     for class_name in financial_df[class_col].unique():
                         class_data = financial_df[financial_df[class_col] == class_name]
@@ -2084,7 +2134,7 @@ def main_app():
                     if class_summary_list:
                         class_summary_df = pd.DataFrame(class_summary_list)
                         class_summary_df["Rate"] = (
-                                    class_summary_df["Collected"] / class_summary_df["Expected"] * 100).fillna(0).round(
+                                class_summary_df["Collected"] / class_summary_df["Expected"] * 100).fillna(0).round(
                             1)
                         class_summary_df = class_summary_df.sort_values("Class")
 
@@ -2113,11 +2163,8 @@ def main_app():
                             st.plotly_chart(fig, use_container_width=True)
 
                     st.markdown("---")
-
-                    # ========== PERFORMANCE BY CATEGORY ==========
                     st.markdown("### 👥 Performance by Pupil Category")
 
-                    # Build category summary manually
                     category_summary_list = []
                     for cat_type in financial_df[pupil_type_col].unique():
                         cat_data = financial_df[financial_df[pupil_type_col] == cat_type]
@@ -2132,10 +2179,9 @@ def main_app():
                     if category_summary_list:
                         category_summary_df = pd.DataFrame(category_summary_list)
                         category_summary_df["Rate"] = (
-                                    category_summary_df["Collected"] / category_summary_df["Expected"] * 100).fillna(
+                                category_summary_df["Collected"] / category_summary_df["Expected"] * 100).fillna(
                             0).round(1)
 
-                        # Display in columns
                         cat_cols = st.columns(len(category_summary_df))
                         for idx, row in category_summary_df.iterrows():
                             with cat_cols[idx]:
@@ -2150,7 +2196,6 @@ def main_app():
                                 </div>
                                 """, unsafe_allow_html=True)
 
-                        # Pie chart
                         fig2 = px.pie(
                             category_summary_df,
                             values="Pupils",
@@ -2162,10 +2207,8 @@ def main_app():
                         st.plotly_chart(fig2, use_container_width=True)
 
                     st.markdown("---")
-
-                    # ========== TOP PERFORMING CLASSES ==========
+                    st.markdown("### 🏆 Top 5 Performing Classes")
                     if class_summary_list:
-                        st.markdown("### 🏆 Top 5 Performing Classes")
                         top_classes = class_summary_df.nlargest(5, "Rate")[
                             ["Class", "Pupils", "Expected", "Collected", "Rate"]]
                         st.dataframe(
