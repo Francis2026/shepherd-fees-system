@@ -676,7 +676,7 @@ class FeesManager:
                 excess = last_entry.get("excess_amount", 0)
                 if balance == 0 and excess > 0:
                     return -excess
-                return balance
+                return balance if balance is not None else 0
             return 0
         except:
             return 0
@@ -1421,6 +1421,10 @@ def main_app():
                 ledger_entries = manager.get_ledger(pupil_id, current_term, current_year)
                 total_paid_this_term = sum([p.get("amount", 0) for p in ledger_entries])
 
+                # Handle None values
+                if previous_balance is None:
+                    previous_balance = 0
+
                 previous_balance = previous_balance if previous_balance is not None else 0
                 term_fees = term_fees if term_fees is not None else 0
                 total_paid_this_term = total_paid_this_term if total_paid_this_term is not None else 0
@@ -1591,6 +1595,10 @@ def main_app():
                         previous_balance = manager.get_previous_term_balance(pupil_id, current_term, current_year)
                         existing_payments = manager.get_ledger(pupil_id, current_term, current_year)
                         total_paid_this_term = sum([p.get("amount", 0) for p in existing_payments])
+
+                        # Handle None values
+                        if previous_balance is None:
+                            previous_balance = 0
 
                         credit_amount = abs(previous_balance) if previous_balance < 0 else 0
                         effective_previous = max(0, previous_balance) if previous_balance > 0 else 0
@@ -1874,13 +1882,6 @@ def main_app():
             df_all, df_staff, df_shepherd, df_community = manager.get_school_wide_summary(
                 current_term, current_year, include_archived=st.session_state.show_archived)
 
-            # DEBUG: Show column names
-            st.write("=== DEBUG INFO ===")
-            st.write("df_all columns:", list(df_all.columns) if not df_all.empty else "Empty")
-            st.write("df_all shape:", df_all.shape if not df_all.empty else "Empty")
-            if not df_all.empty:
-                st.dataframe(df_all.head())
-            st.write("=================")
 
             # Apply filters
             if filter_class != "All Classes" and not df_all.empty:
