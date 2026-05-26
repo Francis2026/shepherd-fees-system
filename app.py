@@ -1750,40 +1750,77 @@ def main_app():
                     financial_df = df_full[
                         df_full["status"] != "Archived (Left School)"] if not df_full.empty else pd.DataFrame()
 
-                if not financial_df.empty:
-                    # Use correct column names
-                    total_pupils = len(financial_df)
-                    total_expected = financial_df["term_fees"].sum() if "term_fees" in financial_df.columns else 0
-                    total_paid = financial_df["total_paid"].sum() if "total_paid" in financial_df.columns else 0
-                    total_balance = financial_df["balance"].sum() if "balance" in financial_df.columns else 0
+                    if not financial_df.empty:
+                        # Use correct column names
+                        total_pupils = len(financial_df)
+                        total_expected = financial_df["term_fees"].sum() if "term_fees" in financial_df.columns else 0
+                        total_paid = financial_df["total_paid"].sum() if "total_paid" in financial_df.columns else 0
+                        total_balance = financial_df["balance"].sum() if "balance" in financial_df.columns else 0
 
-                    cleared_count = len(
-                        financial_df[financial_df["status"] == "Cleared"]) if "status" in financial_df.columns else 0
-                    not_cleared_count = len(financial_df[financial_df[
-                                                             "status"] == "Not Cleared"]) if "status" in financial_df.columns else 0
+                        cleared_count = len(
+                            financial_df[
+                                financial_df["status"] == "Cleared"]) if "status" in financial_df.columns else 0
+                        not_cleared_count = len(financial_df[financial_df[
+                                                                 "status"] == "Not Cleared"]) if "status" in financial_df.columns else 0
 
-                    collection_rate = (total_paid / total_expected * 100) if total_expected > 0 else 0
+                        collection_rate = (total_paid / total_expected * 100) if total_expected > 0 else 0
 
-                    # Display metrics with smaller fonts
-                    col_a, col_b, col_c, col_d, col_e, col_f = st.columns(6)
-                    with col_a:
-                        st.metric("📚 Pupils", total_pupils)
-                    with col_b:
-                        st.metric("💰 Expected", f"UGX {total_expected:,.0f}")
-                    with col_c:
-                        st.metric("✅ Collected", f"UGX {total_paid:,.0f}")
-                    with col_d:
-                        st.metric("⚠️ Balance", f"UGX {total_balance:,.0f}")
-                    with col_e:
-                        st.metric("🎯 Cleared", cleared_count)
-                    with col_f:
-                        st.metric("❌ Not Cleared", not_cleared_count)
+                        # Display metrics using custom HTML (smaller fonts)
+                        col_a, col_b, col_c, col_d, col_e, col_f = st.columns(6)
 
-                    if collection_rate > 0:
-                        st.progress(collection_rate / 100)
-                        st.caption(f"📈 Progress: {collection_rate:.1f}%")
+                        with col_a:
+                            st.markdown(f"""
+                            <div style="background-color: #f8f9fa; border-radius: 8px; padding: 4px; text-align: center;">
+                                <p style="font-size: 0.55rem; color: #6c757d; margin: 0;">📚 Pupils</p>
+                                <p style="font-size: 0.9rem; font-weight: 600; color: #1E3A5F; margin: 0;">{total_pupils}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
 
-                    # ... rest of your class reports code (breakdown by pupil type, etc.)
+                        with col_b:
+                            st.markdown(f"""
+                            <div style="background-color: #f8f9fa; border-radius: 8px; padding: 4px; text-align: center;">
+                                <p style="font-size: 0.55rem; color: #6c757d; margin: 0;">💰 Expected</p>
+                                <p style="font-size: 0.65rem; font-weight: 600; color: #1E3A5F; margin: 0;">UGX {total_expected:,.0f}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                        with col_c:
+                            st.markdown(f"""
+                            <div style="background-color: #f8f9fa; border-radius: 8px; padding: 4px; text-align: center;">
+                                <p style="font-size: 0.55rem; color: #6c757d; margin: 0;">✅ Collected</p>
+                                <p style="font-size: 0.65rem; font-weight: 600; color: #28A745; margin: 0;">UGX {total_paid:,.0f}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                        with col_d:
+                            st.markdown(f"""
+                            <div style="background-color: #f8f9fa; border-radius: 8px; padding: 4px; text-align: center;">
+                                <p style="font-size: 0.55rem; color: #6c757d; margin: 0;">⚠️ Balance</p>
+                                <p style="font-size: 0.65rem; font-weight: 600; color: #DC3545; margin: 0;">UGX {total_balance:,.0f}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                        with col_e:
+                            st.markdown(f"""
+                            <div style="background-color: #f8f9fa; border-radius: 8px; padding: 4px; text-align: center;">
+                                <p style="font-size: 0.55rem; color: #6c757d; margin: 0;">🎯 Cleared</p>
+                                <p style="font-size: 0.9rem; font-weight: 600; color: #28A745; margin: 0;">{cleared_count}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                        with col_f:
+                            st.markdown(f"""
+                            <div style="background-color: #f8f9fa; border-radius: 8px; padding: 4px; text-align: center;">
+                                <p style="font-size: 0.55rem; color: #6c757d; margin: 0;">❌ Not Cleared</p>
+                                <p style="font-size: 0.9rem; font-weight: 600; color: #DC3545; margin: 0;">{not_cleared_count}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                        if collection_rate > 0:
+                            st.progress(collection_rate / 100)
+                            st.caption(f"📈 Progress: {collection_rate:.1f}%")
+
+
 
                     st.markdown("---")
 
