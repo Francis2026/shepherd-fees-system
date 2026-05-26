@@ -39,7 +39,7 @@ if "app_initialized" not in st.session_state:
     st.session_state.show_enrollment_dialog = False
     st.session_state.quick_pay_pupil = None
     st.session_state.quick_pay_name = ""
-    st.session_state.term_data_initialized = False
+    st.session_state.initialized_terms = {}  # Track which term/year combos are initialized
 
 # ------------------- Modern Color Scheme -------------------
 COLORS = {
@@ -559,7 +559,7 @@ CLASS_PROGRESSION = {
 TERM_ORDER = ["Term 1", "Term 2", "Term 3"]
 
 
-# ==================== SUPABASE FEES MANAGER (BALANCE CARRY-FORWARD FIXED) ====================
+# ==================== SUPABASE FEES MANAGER (FULLY FIXED) ====================
 class FeesManager:
     def __init__(self):
         self.classes = list(CLASS_PROGRESSION.keys())
@@ -656,12 +656,12 @@ class FeesManager:
             return []
 
     def get_term_closing_balance(self, pupil_id, term, year):
-        """Get the closing balance for a specific term (from the last payment or 0 if no payments)"""
+        """Get the closing balance for a specific term"""
         if supabase is None:
             return 0
 
         try:
-            # Get all payments for this term, ordered by date
+            # Get the last payment of the term
             result = supabase.table("payments").select("balance, excess_amount") \
                 .eq("pupil_id", pupil_id) \
                 .eq("term", term) \
@@ -679,8 +679,6 @@ class FeesManager:
                 if balance == 0 and excess > 0:
                     return -excess
                 return balance if balance is not None else 0
-
-            # No payments in this term - balance is 0
             return 0
         except:
             return 0
@@ -691,15 +689,12 @@ class FeesManager:
         current_order = term_order.get(current_term, 1)
 
         if current_order == 1:
-            # Term 1: Previous is Term 3 of last year
             prev_year = current_year - 1
             prev_term = "Term 3"
         elif current_order == 2:
-            # Term 2: Previous is Term 1 of same year
             prev_term = "Term 1"
             prev_year = current_year
         else:
-            # Term 3: Previous is Term 2 of same year
             prev_term = "Term 2"
             prev_year = current_year
 
@@ -728,7 +723,7 @@ class FeesManager:
             return []
 
     def enroll_pupil(self, name, class_name, term_fees, pupil_type, current_term, current_year):
-        """Enroll a NEW pupil - automatically enrolls them in the current term"""
+        """Enroll a NEW pupil - ONLY enrolls them in their starting term (not future terms)"""
         if supabase is None:
             st.error("Database not connected")
             return None
@@ -765,6 +760,7 @@ class FeesManager:
 
             supabase.table("pupils").insert(pupil_data).execute()
 
+            # ONLY enroll in the starting term (not future terms)
             supabase.table("term_enrollments").insert({
                 "pupil_id": pupil_id,
                 "term": current_term,
@@ -833,12 +829,24 @@ class FeesManager:
             return False
 
     def archive_pupil(self, pupil_id, leaving_reason=""):
+        """Archive a pupil - deactivate future terms but keep historical data"""
         if supabase is None:
             return False
 
         try:
-            supabase.table("term_enrollments").update({"is_active": False}) \
-                .eq("pupil_id", pupil_id).execute()
+            # Get current term/year from pupil
+            pupil = self.get_pupil_details(pupil_id)
+            if pupil:
+                # Only deactivate enrollment for the term they are leaving FROM
+                # Previous terms should remain active for historical accuracy
+                current_term = pupil.get("current_term", "Term 1")
+                current_year = pupil.get("current_year", 2024)
+
+                supabase.table("term_enrollments").update({"is_active": False}) \
+                    .eq("pupil_id", pupil_id) \
+                    .eq("term", current_term) \
+                    .eq("year", current_year) \
+                    .execute()
 
             supabase.table("pupils").update({
                 "active": False,
@@ -884,15 +892,42 @@ class FeesManager:
             return False
 
     def initialize_existing_pupils_for_term(self, term, year):
-        """Initialize all existing pupils for a specific term"""
+        """Initialize ONLY pupils whose enrollment date is BEFORE or AT this term"""
         if supabase is None:
             return 0
 
         try:
+            init_key = f"{term}_{year}"
+            if st.session_state.initialized_terms.get(init_key, False):
+                return 0
+
+            # Get all active, non-archived pupils
             pupils = self.get_all_pupils(include_archived=False)
             initialized_count = 0
 
             for pupil in pupils:
+                pupil_enrollment_term = pupil.get("enrollment_term", "Term 1")
+                pupil_enrollment_year = pupil.get("enrollment_year", year)
+
+                # Determine if this pupil should be enrolled in this term
+                term_order = {"Term 1": 1, "Term 2": 2, "Term 3": 3}
+                current_term_num = term_order.get(term, 1)
+                enrollment_term_num = term_order.get(pupil_enrollment_term, 1)
+
+                # Pupil should be enrolled if:
+                # 1. They enrolled in a previous year (always enrolled in all terms of current year)
+                # 2. They enrolled in the same year AND this term is >= their enrollment term
+                if pupil_enrollment_year < year:
+                    should_enroll = True
+                elif pupil_enrollment_year == year:
+                    should_enroll = (current_term_num >= enrollment_term_num)
+                else:
+                    should_enroll = False
+
+                if not should_enroll:
+                    continue
+
+                # Check if already enrolled
                 existing = supabase.table("term_enrollments").select("*") \
                     .eq("pupil_id", pupil["id"]) \
                     .eq("term", term) \
@@ -913,12 +948,13 @@ class FeesManager:
                 cache.invalidate(data_type="enrollments")
                 cache.invalidate(data_type="stats")
 
+            st.session_state.initialized_terms[init_key] = True
             return initialized_count
         except Exception as e:
             st.error(f"Error initializing term data: {str(e)}")
             return 0
 
-    def enroll_pupil_into_term(self, pupil_id, term, year):
+    def enroll_pupil_into_term(self, pupil_id, to_term, to_year, from_term, from_year):
         """Enroll a pupil from previous term into current term with balance carry-forward"""
         if supabase is None:
             return False
@@ -927,8 +963,8 @@ class FeesManager:
             # Check if already enrolled in this term
             existing = supabase.table("term_enrollments").select("*") \
                 .eq("pupil_id", pupil_id) \
-                .eq("term", term) \
-                .eq("year", year) \
+                .eq("term", to_term) \
+                .eq("year", to_year) \
                 .execute()
 
             if existing.data:
@@ -939,63 +975,43 @@ class FeesManager:
             if not pupil:
                 return False
 
-            # Get previous term balance (this is the key fix)
-            previous_balance = self.get_previous_term_balance(pupil_id, term, year)
-
-            # Also get the previous term's excess amount if any
-            term_order = self.term_order
-            current_order = term_order.get(term, 1)
-
-            if current_order == 1:
-                prev_year = year - 1
-                prev_term = "Term 3"
-            elif current_order == 2:
-                prev_term = "Term 1"
-                prev_year = year
-            else:
-                prev_term = "Term 2"
-                prev_year = year
+            # Get previous term balance
+            previous_balance = self.get_term_closing_balance(pupil_id, from_term, from_year)
 
             # Enroll in term
             supabase.table("term_enrollments").insert({
                 "pupil_id": pupil_id,
-                "term": term,
-                "year": year,
+                "term": to_term,
+                "year": to_year,
                 "is_active": True,
                 "enrolled_at": datetime.datetime.now().isoformat()
             }).execute()
 
             # Update pupil's current term
             supabase.table("pupils").update({
-                "current_term": term,
-                "current_year": year
+                "current_term": to_term,
+                "current_year": to_year
             }).eq("id", pupil_id).execute()
 
             # If there's a balance (positive or negative), create an opening balance record
             if previous_balance != 0:
                 term_fees = pupil.get("term_fees", 0)
                 opening_id = str(uuid.uuid4())
-                receipt_no = f"OPEN-BAL-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
+                receipt_no = f"BAL-CF-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-                if current_order == 1:
-                    source_term = f"Term 3, {year - 1}"
-                elif current_order == 2:
-                    source_term = f"Term 1, {year}"
-                else:
-                    source_term = f"Term 2, {year}"
+                source_desc = f"{from_term} {from_year}"
 
-                # For negative balance (credit), we need to record it properly
                 if previous_balance < 0:
-                    # Credit balance - record as a credit entry
+                    # Credit balance
                     credit_amount = abs(previous_balance)
                     supabase.table("payments").insert({
                         "id": opening_id,
                         "pupil_id": pupil_id,
-                        "term": term,
-                        "year": int(year),
+                        "term": to_term,
+                        "year": int(to_year),
                         "amount": 0,
-                        "description": f"Credit balance carried forward from {source_term} (UGX {credit_amount:,.0f})",
-                        "balance": previous_balance,  # Negative balance
+                        "description": f"Credit carried forward from {source_desc} (UGX {credit_amount:,.0f})",
+                        "balance": previous_balance,
                         "previous_balance": 0,
                         "term_fees": term_fees,
                         "receipt_no": receipt_no,
@@ -1003,14 +1019,14 @@ class FeesManager:
                         "payment_date": datetime.datetime.now().isoformat()
                     }).execute()
                 else:
-                    # Positive balance (debt)
+                    # Debt balance
                     supabase.table("payments").insert({
                         "id": opening_id,
                         "pupil_id": pupil_id,
-                        "term": term,
-                        "year": int(year),
+                        "term": to_term,
+                        "year": int(to_year),
                         "amount": 0,
-                        "description": f"Opening balance carried forward from {source_term}",
+                        "description": f"Balance carried forward from {source_desc}",
                         "balance": previous_balance,
                         "previous_balance": previous_balance,
                         "term_fees": term_fees,
@@ -1178,10 +1194,12 @@ class FeesManager:
 
                 stats["total_expected"] += term_fees
 
+                # Get total paid for this term (excluding opening balance entries)
                 result = supabase.table("payments").select("amount") \
                     .eq("pupil_id", pupil.get("id")) \
                     .eq("term", term) \
                     .eq("year", int(year)) \
+                    .neq("amount", 0) \
                     .execute()
 
                 total_paid = sum([p.get("amount", 0) for p in result.data])
@@ -1373,15 +1391,16 @@ def main_app():
 
         manager = FeesManager()
 
-        # CRITICAL FIX: Initialize term data for existing pupils on first load
-        if role == "bursar" and not st.session_state.get("term_data_initialized", False):
-            with st.spinner(f"Initializing term data for {current_term} {current_year}..."):
-                initialized = manager.initialize_existing_pupils_for_term(current_term, current_year)
-                if initialized > 0:
-                    st.success(f"✅ Initialized {initialized} existing pupils for {current_term} {current_year}")
-                st.session_state.term_data_initialized = True
-                time.sleep(1)
-                st.rerun()
+        # Initialize term data for the CURRENT term only
+        if role == "bursar":
+            init_key = f"{current_term}_{current_year}"
+            if not st.session_state.initialized_terms.get(init_key, False):
+                with st.spinner(f"Initializing term data for {current_term} {current_year}..."):
+                    initialized = manager.initialize_existing_pupils_for_term(current_term, current_year)
+                    if initialized > 0:
+                        st.success(f"✅ Initialized {initialized} existing pupils for {current_term} {current_year}")
+                    time.sleep(0.5)
+                    st.rerun()
 
         # Show enrollment dialog if flag is set
         if st.session_state.get("show_enrollment_dialog", False):
@@ -1413,9 +1432,13 @@ def main_app():
                 with col1:
                     if st.button(f"Enroll Selected ({len(selected_pupils)} pupils)", use_container_width=True):
                         for pupil in selected_pupils:
-                            manager.enroll_pupil_into_term(pupil['id'],
-                                                           st.session_state.enroll_to_term,
-                                                           st.session_state.enroll_to_year)
+                            manager.enroll_pupil_into_term(
+                                pupil['id'],
+                                st.session_state.enroll_to_term,
+                                st.session_state.enroll_to_year,
+                                st.session_state.enroll_from_term,
+                                st.session_state.enroll_from_year
+                            )
                         st.success(
                             f"✅ Enrolled {len(selected_pupils)} pupils into {st.session_state.enroll_to_term} {st.session_state.enroll_to_year}")
                         st.session_state.show_enrollment_dialog = False
@@ -1433,7 +1456,7 @@ def main_app():
             st.session_state.show_archived = show_archived
 
         if st.button("🚪 Logout", key="logout_btn", use_container_width=True):
-            for key in ["logged_in", "username", "role", "navigation_menu", "show_archived", "term_data_initialized"]:
+            for key in ["logged_in", "username", "role", "navigation_menu", "show_archived", "initialized_terms"]:
                 if key in st.session_state:
                     del st.session_state[key]
             cache.clear_all()
@@ -1596,55 +1619,51 @@ def main_app():
                 pupil_type = pupil.get("pupil_type", "Community Child")
                 enrollment_info = f"{pupil.get('enrollment_term', 'Term 1')} {pupil.get('enrollment_year', current_year)}"
 
+                # Get previous term balance (important for display)
                 previous_balance = manager.get_previous_term_balance(pupil_id, current_term, current_year)
+
+                # Get ledger entries (including opening balance if any)
                 ledger_entries = manager.get_ledger(pupil_id, current_term, current_year)
-                total_paid_this_term = sum([p.get("amount", 0) for p in ledger_entries])
+
+                # Calculate total paid this term (excluding opening balance entries which have amount=0)
+                total_paid_this_term = sum([p.get("amount", 0) for p in ledger_entries if p.get("amount", 0) > 0])
 
                 if previous_balance is None:
                     previous_balance = 0
 
-                previous_balance = previous_balance if previous_balance is not None else 0
-                term_fees = term_fees if term_fees is not None else 0
-                total_paid_this_term = total_paid_this_term if total_paid_this_term is not None else 0
-
+                # Calculate financials with previous balance
                 credit_amount = abs(previous_balance) if previous_balance < 0 else 0
-                effective_previous = max(0, previous_balance) if previous_balance > 0 else 0
+                debt_amount = previous_balance if previous_balance > 0 else 0
 
-                total_due = effective_previous + term_fees
+                total_due = debt_amount + term_fees
                 current_balance = max(0, total_due - total_paid_this_term - credit_amount)
 
+                # Calculate remaining credit after applying to this term
+                remaining_credit = max(0, credit_amount - total_paid_this_term)
+
+                # Build transaction list for display
                 all_transactions = []
 
-                if credit_amount > 0:
-                    term_order = manager.term_order[current_term]
-                    if term_order == 1:
-                        source_term = f"Term 3, {current_year - 1}"
-                    elif term_order == 2:
-                        source_term = f"Term 1, {current_year}"
-                    else:
-                        source_term = f"Term 2, {current_year}"
-
-                    credit_amt = credit_amount if credit_amount is not None else 0
-                    total_due_amt = total_due if total_due is not None else 0
-
+                # Add opening balance if exists
+                opening_entries = [e for e in ledger_entries if
+                                   e.get("amount", 0) == 0 and "carried forward" in e.get("description", "").lower()]
+                for entry in opening_entries:
                     all_transactions.append({
                         "S/No": 0,
-                        "Date": f"Credit from {source_term}",
+                        "Date": entry.get("payment_date", "")[:10] if entry.get("payment_date") else "",
                         "Amount Paid": "UGX 0",
-                        "Credit Applied": f"UGX {credit_amt:,.0f}",
-                        "Description": "Credit balance carried forward",
-                        "Balance After": f"UGX {max(0, total_due_amt - credit_amt):,.0f}",
-                        "Receipt No": "N/A"
+                        "Credit Applied": f"UGX {entry.get('excess_amount', 0):,.0f}" if entry.get('excess_amount',
+                                                                                                   0) > 0 else "UGX 0",
+                        "Description": entry.get("description", ""),
+                        "Balance After": f"UGX {entry.get('balance', 0):,.0f}",
+                        "Receipt No": entry.get("receipt_no", "")
                     })
 
-                for idx, entry in enumerate(ledger_entries, 1):
+                # Add regular payments
+                payment_entries = [e for e in ledger_entries if e.get("amount", 0) > 0]
+                for idx, entry in enumerate(payment_entries, len(all_transactions) + 1):
                     amount = entry.get('amount', 0)
-                    if amount is None:
-                        amount = 0
-
                     balance = entry.get('balance', 0)
-                    if balance is None:
-                        balance = 0
 
                     all_transactions.append({
                         "S/No": idx,
@@ -1656,17 +1675,26 @@ def main_app():
                         "Receipt No": entry.get("receipt_no", "")
                     })
 
+                # Create expander title with previous balance info
                 if is_archived:
                     expander_title = f"📌 {pupil['name']} — {pupil_type} — [ARCHIVED]"
                 elif is_sponsored:
                     expander_title = f"📌 {pupil['name']} — {pupil_type} — 🎓 SPONSORED"
                 else:
-                    if credit_amount > 0:
-                        expander_title = f"📌 {pupil['name']} — {pupil_type} — 💳 Credit: UGX {credit_amount:,.0f} | Due: UGX {current_balance:,.0f}"
+                    if previous_balance > 0:
+                        expander_title = f"📌 {pupil['name']} — {pupil_type} — ⚠️ Previous Debt: UGX {previous_balance:,.0f} | This Term: UGX {term_fees:,.0f} | Paid: UGX {total_paid_this_term:,.0f} | Balance: UGX {current_balance:,.0f}"
+                    elif previous_balance < 0:
+                        expander_title = f"📌 {pupil['name']} — {pupil_type} — 💳 Previous Credit: UGX {abs(previous_balance):,.0f} | This Term: UGX {term_fees:,.0f} | Paid: UGX {total_paid_this_term:,.0f} | Balance: UGX {current_balance:,.0f}"
                     else:
                         expander_title = f"📌 {pupil['name']} — {pupil_type} — Fees: UGX {term_fees:,.0f} | Paid: UGX {total_paid_this_term:,.0f} | Balance: UGX {current_balance:,.0f}"
 
                 with st.expander(expander_title):
+                    # Show previous balance prominently
+                    if previous_balance > 0:
+                        st.warning(f"💰 **Previous Term Balance (Debt Carried Forward):** UGX {previous_balance:,.0f}")
+                    elif previous_balance < 0:
+                        st.success(f"💳 **Previous Term Credit Carried Forward:** UGX {abs(previous_balance):,.0f}")
+
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         st.caption(f"📅 Enrolled: {enrollment_info}")
@@ -1676,17 +1704,18 @@ def main_app():
                         if is_sponsored:
                             st.caption(f"🙏 Reason: {sponsor_reason}")
                     with col4:
-                        if credit_amount > 0:
-                            st.success(f"💳 Credit: UGX {credit_amount:,.0f}")
+                        if remaining_credit > 0:
+                            st.success(f"💳 Remaining Credit: UGX {remaining_credit:,.0f}")
 
                     if all_transactions:
                         df = pd.DataFrame(all_transactions)
                         st.dataframe(df, use_container_width=True, height=min(400, 35 * len(df) + 38))
 
-                        if ledger_entries:
+                        # Receipt buttons for payment entries
+                        if payment_entries:
                             st.markdown("---")
                             st.markdown("### 📄 Receipts")
-                            for entry in ledger_entries:
+                            for entry in payment_entries:
                                 if st.button(f"🖨️ Receipt {entry.get('receipt_no', '')[-12:]}",
                                              key=f"print_{entry.get('id', '')}"):
                                     pdf_buffer = generate_pdf_receipt(
@@ -1771,18 +1800,21 @@ def main_app():
                     if is_sponsored:
                         st.warning("This is a sponsored child. No payment required.")
                     else:
+                        # Get previous balance and current payments
                         previous_balance = manager.get_previous_term_balance(pupil_id, current_term, current_year)
                         existing_payments = manager.get_ledger(pupil_id, current_term, current_year)
-                        total_paid_this_term = sum([p.get("amount", 0) for p in existing_payments])
+                        total_paid_this_term = sum(
+                            [p.get("amount", 0) for p in existing_payments if p.get("amount", 0) > 0])
 
                         if previous_balance is None:
                             previous_balance = 0
 
                         credit_amount = abs(previous_balance) if previous_balance < 0 else 0
-                        effective_previous = max(0, previous_balance) if previous_balance > 0 else 0
+                        debt_amount = previous_balance if previous_balance > 0 else 0
 
-                        total_due = effective_previous + term_fees
+                        total_due = debt_amount + term_fees
                         current_balance = max(0, total_due - total_paid_this_term - credit_amount)
+                        remaining_credit = max(0, credit_amount - total_paid_this_term)
 
                         col1, col2, col3, col4, col5 = st.columns(5)
 
@@ -1826,11 +1858,14 @@ def main_app():
                             </div>
                             """, unsafe_allow_html=True)
 
-                        if credit_amount > 0:
-                            st.success(f"✅ **Credit Available: UGX {credit_amount:,.0f}**")
+                        if previous_balance > 0:
+                            st.warning(
+                                f"⚠️ **Balance carried forward from previous term: UGX {previous_balance:,.0f}**")
+                        if previous_balance < 0:
+                            st.success(f"✅ **Credit available from previous term: UGX {abs(previous_balance):,.0f}**")
                             st.caption(f"👉 This credit will be automatically deducted from this term's fees")
-                        if effective_previous > 0:
-                            st.warning(f"⚠️ **Balance carried forward: UGX {effective_previous:,.0f}**")
+                        if remaining_credit > 0:
+                            st.info(f"💡 Remaining credit after applying to this term: UGX {remaining_credit:,.0f}")
 
                         st.markdown("---")
 
@@ -1849,7 +1884,7 @@ def main_app():
                                 if trans_id:
                                     if excess_amount > 0:
                                         st.success(f"✅ Payment of UGX {amount_paid:,.0f} recorded!")
-                                        st.info(f"💰 Excess of UGX {excess_amount:,.0f} carried to next term!")
+                                        st.info(f"💰 Excess of UGX {excess_amount:,.0f} will be carried to next term!")
                                     else:
                                         st.success(f"✅ Payment of UGX {amount_paid:,.0f} recorded!")
 
@@ -2310,7 +2345,7 @@ def main_app():
                             total_paid_all = 0
                             for term in ["Term 1", "Term 2", "Term 3"]:
                                 payments = manager.get_ledger(pupil['id'], term, 2024)
-                                term_paid = sum([p.get("amount", 0) for p in payments])
+                                term_paid = sum([p.get("amount", 0) for p in payments if p.get("amount", 0) > 0])
                                 total_paid_all += term_paid
                                 if term_paid > 0:
                                     st.write(f"- {term}: UGX {term_paid:,.0f}")
