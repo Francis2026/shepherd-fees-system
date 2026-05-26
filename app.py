@@ -1386,24 +1386,32 @@ def main_app():
                 st.session_state.enroll_to_year = current_year
                 st.rerun()
             st.markdown("---")
-            # === DEBUG BUTTON - Force Update Current Term + Carry Forward ===
+
+            st.markdown("---")
+
             # === DEBUG BUTTON: Force Update Current Term + Carry Forward ===
             if st.button("🔧 Force Update Current Term + Carry Forward",
                          type="secondary", use_container_width=True):
+
                 with st.spinner("Forcing term update and balance carry forward..."):
                     count = 0
-                    all_pupils = manager.get_pupils_for_term("All Classes", current_term, current_year)
-                    for pupil in all_pupils:
-                        success = manager.enroll_pupil_into_term(
-                            pupil['id'],
-                            current_term,
-                            current_year,
-                            st.session_state.get('enroll_from_term', "Term 1"),
-                            st.session_state.get('enroll_from_year', current_year - 1)
-                        )
-                        if success:
-                            count += 1
-                    st.success(f"✅ Updated {count} pupils with current term and balance carry-forward")
+                    try:
+                        all_pupils = manager.get_pupils_for_term("All Classes", current_term, current_year)
+                        for pupil in all_pupils:
+                            success = manager.enroll_pupil_into_term(
+                                pupil['id'],
+                                current_term,
+                                current_year,
+                                st.session_state.get('enroll_from_term', "Term 1"),
+                                st.session_state.get('enroll_from_year', current_year - 1)
+                            )
+                            if success:
+                                count += 1
+
+                        st.success(f"✅ Updated {count} pupils with current term and balance carry-forward")
+                    except Exception as e:
+                        st.error(f"Error during update: {str(e)}")
+
                     cache.clear_all()
                     st.rerun()
 
