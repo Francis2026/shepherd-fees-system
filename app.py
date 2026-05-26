@@ -1723,6 +1723,26 @@ def main_app():
                 st.markdown("---")
                 st.markdown("### 📊 Class Summary Statistics")
 
+                # Add CSS to reduce font size
+                st.markdown("""
+                <style>
+                    div[data-testid="stMetric"] {
+                        background-color: #f8f9fa;
+                        border-radius: 8px;
+                        padding: 4px;
+                        text-align: center;
+                    }
+                    div[data-testid="stMetric"] label {
+                        font-size: 0.6rem !important;
+                        color: #6c757d !important;
+                    }
+                    div[data-testid="stMetric"] div {
+                        font-size: 0.75rem !important;
+                        font-weight: 600 !important;
+                    }
+                </style>
+                """, unsafe_allow_html=True)
+
                 # Filter out archived pupils for financial stats
                 if report_type == "Archived Only":
                     financial_df = df_archived
@@ -1744,16 +1764,16 @@ def main_app():
 
                     collection_rate = (total_paid / total_expected * 100) if total_expected > 0 else 0
 
-                    # Display metrics
+                    # Display metrics with smaller fonts
                     col_a, col_b, col_c, col_d, col_e, col_f = st.columns(6)
                     with col_a:
-                        st.metric("📚 Total Pupils", total_pupils)
+                        st.metric("📚 Pupils", total_pupils)
                     with col_b:
-                        st.metric("💰 Total Expected", f"UGX {total_expected:,.0f}")
+                        st.metric("💰 Expected", f"UGX {total_expected:,.0f}")
                     with col_c:
-                        st.metric("✅ Total Collected", f"UGX {total_paid:,.0f}")
+                        st.metric("✅ Collected", f"UGX {total_paid:,.0f}")
                     with col_d:
-                        st.metric("⚠️ Total Balance", f"UGX {total_balance:,.0f}")
+                        st.metric("⚠️ Balance", f"UGX {total_balance:,.0f}")
                     with col_e:
                         st.metric("🎯 Cleared", cleared_count)
                     with col_f:
@@ -1761,7 +1781,9 @@ def main_app():
 
                     if collection_rate > 0:
                         st.progress(collection_rate / 100)
-                        st.caption(f"📈 Collection Progress: {collection_rate:.1f}%")
+                        st.caption(f"📈 Progress: {collection_rate:.1f}%")
+
+                    # ... rest of your class reports code (breakdown by pupil type, etc.)
 
                     st.markdown("---")
 
