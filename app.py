@@ -1614,10 +1614,14 @@ def main_app():
                 term_fees = pupil.get("term_fees", 0) or 0
                 is_sponsored = pupil.get("is_sponsored", False)
                 pupil_type = pupil.get("pupil_type", "Community Child")
-                enrollment_info = f"{pupil.get('enrollment_term', 'Term 1')} {pupil.get('enrollment_year', current_year)}"
+                current_term_display = pupil.get('current_term', current_term)
+                current_year_display = pupil.get('current_year', current_year)
+                enrollment_info = f"{current_term_display} {current_year_display}"
 
                 previous_balance = manager.get_previous_term_balance(pupil_id, current_term, current_year) or 0
                 ledger_entries = manager.get_ledger(pupil_id, current_term, current_year)
+
+
 
                 total_paid_this_term = sum(p.get("amount", 0) or 0 for p in ledger_entries if p.get("amount", 0) > 0)
 
