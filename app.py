@@ -334,18 +334,10 @@ def init_supabase():
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
 
-        # Use ClientOptions for better configuration
-        from supabase.lib.client_options import ClientOptions
+        # Simple and stable initialization
+        client = create_client(url, key)
 
-        options = ClientOptions(
-            postgrest_client_timeout=60,  # 60 seconds timeout
-            storage_client_timeout=60,
-            schema="public"
-        )
-
-        client = create_client(url, key, options=options)
-
-        # Light test connection
+        # Test the connection
         client.table("pupils").select("id").limit(1).execute()
 
         return client
