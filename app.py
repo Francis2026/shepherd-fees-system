@@ -846,6 +846,16 @@ class FeesManager:
                 "sponsor_reason": sponsor_reason
             }).eq("id", pupil_id).execute()
 
+            # ALSO update the CURRENT term enrollment fee to match
+            pupil = self.get_pupil_details(pupil_id)
+            if pupil:
+                current_term = pupil.get("current_term", "Term 1")
+                current_year = pupil.get("current_year", 2024)
+
+                supabase.table("term_enrollments").update({
+                    "term_fees": term_fees
+                }).eq("pupil_id", pupil_id).eq("term", current_term).eq("year", current_year).execute()
+
             cache.invalidate(data_type="pupils")
             cache.invalidate(f"pupil_{pupil_id}")
             return True
