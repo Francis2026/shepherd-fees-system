@@ -1668,10 +1668,14 @@ def main_app():
                     all_transactions.append({
                         "S/No": idx,
                         "Date": entry.get("payment_date", "")[:10] if entry.get("payment_date") else "",
-                        "Amount Paid": f"UGX {amount:,.0f}",
-                        "Credit Applied": "UGX 0",
+                        # "Amount Paid": f"UGX {amount:,.0f}",
+                        "Amount Paid": f"UGX {(amount if amount is not None else 0):,.0f}",
+                        # "Credit Applied": "UGX 0",
+                        "Credit Applied": f"UGX {(entry.get('excess_amount', 0) if entry.get('excess_amount', 0) is not None else 0):,.0f}" if entry.get(
+                            'excess_amount', 0) > 0 else "UGX 0",
                         "Description": entry.get("description", "Payment"),
-                        "Balance After": f"UGX {balance:,.0f}",
+                        # "Balance After": f"UGX {balance:,.0f}",
+                        "Balance After": f"UGX {(balance if balance is not None else 0):,.0f}",
                         "Receipt No": entry.get("receipt_no", "")
                     })
 
@@ -1745,9 +1749,11 @@ def main_app():
                             st.session_state.quick_pay_name = pupil['name']
                             st.rerun()
 
-    # ==================== RECORD PAYMENT SECTION (REDESIGNED) ====================
+    # ------------------- RECORD PAYMENT SECTION (FIXED - NO FUTURE TERMS) -------------------
     elif menu == "Record Payment" and role == "bursar":
-        st.markdown("<h1 style='color: #1E3A5F; font-size: 1.5rem;'>Record Payment</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='color: #1E3A5F; font-size: 1.5rem;'>💰 Record Payment - All Terms</h1>",
+                    unsafe_allow_html=True)
+        st.info("✅ **Shows ONLY completed and current terms (no future terms)**")
 
         # Get ALL pupils (active only)
         all_active_pupils = manager.get_all_pupils(include_archived=False)
@@ -1759,9 +1765,10 @@ def main_app():
             col_filter1, col_filter2 = st.columns([1, 2])
             with col_filter1:
                 filter_class = st.selectbox("Filter by Class", ["All Classes"] + manager.classes,
-                                            key="filter_payment_class")
+                                            key="filter_payment_class_fixed")
             with col_filter2:
-                search_term = st.text_input("Search by Name", placeholder="Type name...", key="search_payment_pupil")
+                search_term = st.text_input("Search by Name", placeholder="Type name...",
+                                            key="search_payment_pupil_fixed")
 
             pupil_dicts = [p for p in all_active_pupils if not p.get("archived", False)]
 
@@ -1776,356 +1783,215 @@ def main_app():
                 pupil_options = {f"{p['name']} ({p['class']})": p['id'] for p in pupil_dicts}
 
                 # Check if coming from quick pay
-                if "quick_pay_pupil" in st.session_state:
+                if "quick_pay_pupil" in st.session_state and st.session_state.quick_pay_pupil:
                     pupil_id = st.session_state.quick_pay_pupil
                     pupil_name = st.session_state.quick_pay_name
                     selected_pupil = next((p for p in pupil_dicts if p['id'] == pupil_id), None)
-                    if not selected_pupil:
-                        del st.session_state.quick_pay_pupil
-                        del st.session_state.quick_pay_name
-                        st.rerun()
-                    else:
-                        st.success(f"Selected: {pupil_name}")
+                    if selected_pupil:
+                        st.success(f"✅ Selected: {pupil_name}")
+                        st.session_state.quick_pay_pupil = None
+                        st.session_state.quick_pay_name = None
                 else:
-                    selected = st.selectbox("Select Pupil", list(pupil_options.keys()), key="payment_pupil")
+                    selected = st.selectbox("Select Pupil", list(pupil_options.keys()), key="payment_pupil_fixed")
                     pupil_id = pupil_options[selected]
                     pupil_name = selected.split(" (")[0]
                     selected_pupil = next((p for p in pupil_dicts if p['id'] == pupil_id), None)
 
-                if selected_pupil:
+                if selected_pupil and not selected_pupil.get("is_sponsored", False):
                     pupil_data = selected_pupil
                     current_term_fees = pupil_data.get("term_fees", 0)
-                    is_sponsored = pupil_data.get("is_sponsored", False)
-                    pupil_type = pupil_data.get("pupil_type", "Community Child")
 
-                    if is_sponsored:
-                        st.warning("⚠️ This is a sponsored child. No payment required.")
-                    else:
-                        # ========== FETCH ALL TERM ENROLLMENTS FOR THIS PUPIL ==========
-                        st.markdown("---")
-                        st.markdown("## 📋 Complete Fee History")
+                    st.markdown("---")
+                    st.markdown(f"## 📋 Fee History for: {pupil_name}")
+                    st.caption(
+                        f"Class: {pupil_data['class']} | Type: {pupil_data.get('pupil_type', 'Community Child')}")
 
-                        # Get all term enrollments for this pupil
-                        try:
-                            result = supabase.table("term_enrollments") \
-                                .select("term, year, is_active") \
-                                .eq("pupil_id", pupil_id) \
-                                .order("year", desc=False) \
-                                .order("term", desc=False) \
-                                .execute()
+                    # Get term order for comparison
+                    term_order_map = {"Term 1": 1, "Term 2": 2, "Term 3": 3}
+                    current_term_num = term_order_map.get(current_term, 1)
 
-                            enrolled_terms = result.data
+                    # Get ALL term enrollments for this pupil
+                    try:
+                        result = supabase.table("term_enrollments") \
+                            .select("term, year, is_active") \
+                            .eq("pupil_id", pupil_id) \
+                            .execute()
 
-                            if not enrolled_terms:
-                                st.warning(
-                                    f"No term enrollment records found for {pupil_name}. Please enroll the pupil first.")
-                            else:
-                                # Build complete fee summary across all terms
-                                term_summaries = []
-                                total_outstanding = 0
-                                total_fees_all_terms = 0
-                                total_paid_all_terms = 0
+                        all_enrolled_terms = result.data
 
-                                for enrollment in enrolled_terms:
-                                    term = enrollment["term"]
-                                    year = enrollment["year"]
-                                    is_active = enrollment.get("is_active", True)
+                        # FILTER: Only show terms that are PAST or CURRENT (not future)
+                        # A term is valid if:
+                        # - Year is less than current year (past year)
+                        # - Year equals current year AND term number <= current term number
+                        valid_terms = []
+                        for enrollment in all_enrolled_terms:
+                            term_year = enrollment["year"]
+                            term_name = enrollment["term"]
+                            term_num = term_order_map.get(term_name, 1)
 
-                                    # Get term fees for this pupil (use current fees for all terms, or store historical)
-                                    term_fee = current_term_fees
+                            if term_year < current_year:
+                                valid_terms.append(enrollment)  # Past year - show all terms
+                            elif term_year == current_year and term_num <= current_term_num:
+                                valid_terms.append(enrollment)  # Current year, current or past terms only
+                            # Future terms (year > current_year OR same year but future term) are EXCLUDED
 
-                                    # Get payments for this term
-                                    payments = manager.get_ledger(pupil_id, term, year)
+                        if not valid_terms:
+                            st.warning(f"No past or current term records found for {pupil_name}.")
+                        else:
+                            # Build complete fee summary ONLY for valid terms
+                            term_summaries = []
+                            total_fees_all_terms = 0
+                            total_paid_all_terms = 0
 
-                                    # Calculate total paid (excluding opening balance entries with amount=0)
-                                    paid_this_term = sum(
-                                        [p.get("amount", 0) for p in payments if p.get("amount", 0) > 0])
+                            for enrollment in valid_terms:
+                                term = enrollment["term"]
+                                year = enrollment["year"]
+                                is_active = enrollment.get("is_active", True)
 
-                                    # Get closing balance for this term
-                                    closing_balance = manager.get_term_closing_balance(pupil_id, term, year)
+                                # Get term fees
+                                term_fee = current_term_fees
 
-                                    # Calculate if term is cleared
-                                    is_cleared = closing_balance <= 0 if closing_balance is not None else (
-                                                paid_this_term >= term_fee)
+                                # Get payments for this term
+                                payments = manager.get_ledger(pupil_id, term, year)
 
-                                    # Determine status
-                                    if not is_active:
-                                        status = "🔴 Inactive"
-                                    elif is_cleared:
-                                        status = "✅ Cleared"
-                                    elif closing_balance and closing_balance > 0:
-                                        status = "⚠️ Outstanding"
-                                        total_outstanding += closing_balance
-                                    else:
-                                        due = term_fee - paid_this_term
-                                        if due > 0:
-                                            status = "⚠️ Outstanding"
-                                            total_outstanding += due
-                                        else:
-                                            status = "✅ Cleared"
+                                # Calculate total paid (only actual payments)
+                                paid_this_term = sum([p.get("amount", 0) for p in payments if p.get("amount", 0) > 0])
 
-                                    term_summaries.append({
-                                        "Term": f"{term} {year}",
-                                        "Term Name": term,
-                                        "Year": year,
-                                        "Fees (UGX)": term_fee,
-                                        "Paid (UGX)": paid_this_term,
-                                        "Balance (UGX)": closing_balance if closing_balance is not None else (
-                                                    term_fee - paid_this_term),
-                                        "Status": status,
-                                        "Is Active": is_active
-                                    })
+                                # Calculate balance (Fees - Paid)
+                                # Don't use closing_balance because it might be affected by carry-forwards
+                                balance = term_fee - paid_this_term
 
-                                    total_fees_all_terms += term_fee
-                                    total_paid_all_terms += paid_this_term
-
-                                # Create DataFrame for display
-                                df_terms = pd.DataFrame(term_summaries)
-
-                                # Calculate overall balance
-                                overall_balance = total_fees_all_terms - total_paid_all_terms
-
-                                # ========== DISPLAY SUMMARY CARDS ==========
-                                col1, col2, col3, col4 = st.columns(4)
-
-                                with col1:
-                                    st.markdown(f"""
-                                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 15px; text-align: center;">
-                                        <p style="color: white; margin: 0; font-size: 0.8rem;">Total Terms Enrolled</p>
-                                        <h2 style="color: white; margin: 0; font-size: 2rem;">{len(term_summaries)}</h2>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-
-                                with col2:
-                                    st.markdown(f"""
-                                    <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border-radius: 12px; padding: 15px; text-align: center;">
-                                        <p style="color: white; margin: 0; font-size: 0.8rem;">Total Fees</p>
-                                        <h3 style="color: white; margin: 0; font-size: 1.3rem;">UGX {total_fees_all_terms:,.0f}</h3>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-
-                                with col3:
-                                    st.markdown(f"""
-                                    <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); border-radius: 12px; padding: 15px; text-align: center;">
-                                        <p style="color: white; margin: 0; font-size: 0.8rem;">Total Paid</p>
-                                        <h3 style="color: white; margin: 0; font-size: 1.3rem;">UGX {total_paid_all_terms:,.0f}</h3>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-
-                                with col4:
-                                    balance_color = "#28a745" if overall_balance <= 0 else "#dc3545"
-                                    balance_text = "Credit" if overall_balance < 0 else "Outstanding"
-                                    st.markdown(f"""
-                                    <div style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); border-radius: 12px; padding: 15px; text-align: center;">
-                                        <p style="color: white; margin: 0; font-size: 0.8rem;">{balance_text}</p>
-                                        <h3 style="color: white; margin: 0; font-size: 1.3rem;">UGX {abs(overall_balance):,.0f}</h3>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-
-                                # ========== TERM-BY-TERM BREAKDOWN TABLE ==========
-                                st.markdown("---")
-                                st.markdown("### 📊 Term-by-Term Breakdown")
-
-                                # Style the DataFrame
-                                def style_balance(val):
-                                    if val > 0:
-                                        return 'color: #dc3545; font-weight: bold'
-                                    elif val < 0:
-                                        return 'color: #28a745; font-weight: bold'
-                                    return 'color: #6c757d'
-
-                                styled_df = df_terms.style.format({
-                                    "Fees (UGX)": "UGX {:,.0f}",
-                                    "Paid (UGX)": "UGX {:,.0f}",
-                                    "Balance (UGX)": "UGX {:,.0f}"
-                                }).applymap(style_balance, subset=["Balance (UGX)"])
-
-                                st.dataframe(styled_df, use_container_width=True, height=400)
-
-                                # ========== PAYMENT SECTION ==========
-                                st.markdown("---")
-                                st.markdown("## 💰 Make Payment")
-
-                                if overall_balance <= 0:
-                                    st.success(
-                                        f"🎉 **Great news!** {pupil_name} has no outstanding balance. Total credit: UGX {abs(overall_balance):,.0f}")
+                                # Determine status based on actual balance
+                                if not is_active:
+                                    status = "🔴 Inactive"
+                                elif balance <= 0:
+                                    status = "✅ Cleared"
+                                    balance = 0  # Don't show negative (credit is shown separately)
                                 else:
-                                    st.warning(f"⚠️ **Total Outstanding Balance:** UGX {overall_balance:,.0f}")
+                                    status = "⚠️ Outstanding"
 
-                                    # Show breakdown of outstanding terms only
-                                    outstanding_terms = df_terms[df_terms["Balance (UGX)"] > 0]
-                                    if not outstanding_terms.empty:
-                                        st.markdown("#### Outstanding Terms:")
-                                        for _, row in outstanding_terms.iterrows():
-                                            st.markdown(f"- **{row['Term']}**: UGX {row['Balance (UGX)']:,.0f}")
+                                term_summaries.append({
+                                    "Term": f"{term} {year}",
+                                    "Term Name": term,
+                                    "Year": year,
+                                    "Fees (UGX)": term_fee,
+                                    "Paid (UGX)": paid_this_term,
+                                    "Balance (UGX)": balance,
+                                    "Status": status
+                                })
 
-                                    st.markdown("---")
+                                total_fees_all_terms += term_fee
+                                total_paid_all_terms += paid_this_term
 
-                                    # Payment allocation method
-                                    allocation_method = st.radio(
-                                        "Payment Allocation Method",
-                                        ["Pay Oldest Debts First", "Pay Specific Term", "Pay All Outstanding"],
-                                        horizontal=True,
-                                        help="Choose how to allocate the payment across outstanding terms"
-                                    )
+                            # Calculate overall balance
+                            overall_balance = total_fees_all_terms - total_paid_all_terms
 
-                                    col1, col2 = st.columns(2)
+                            # Display summary cards
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("📚 Terms Completed", len(term_summaries))
+                            with col2:
+                                st.metric("💰 Total Fees", f"UGX {total_fees_all_terms:,.0f}")
+                            with col3:
+                                st.metric("✅ Total Paid", f"UGX {total_paid_all_terms:,.0f}")
+                            with col4:
+                                if overall_balance > 0:
+                                    st.metric("⚠️ Total Outstanding", f"UGX {overall_balance:,.0f}", delta="Due")
+                                else:
+                                    st.metric("💳 Credit", f"UGX {abs(overall_balance):,.0f}", delta="Credit")
 
-                                    with col1:
-                                        amount_paid = st.number_input(
-                                            "Amount to Pay (UGX)",
-                                            min_value=0,
-                                            value=min(overall_balance, 500000),
-                                            step=50000,
-                                            key="payment_amount_multi"
-                                        )
+                            # Display term breakdown table
+                            st.markdown("---")
+                            st.markdown("### 📊 Term-by-Term Breakdown")
 
-                                    with col2:
-                                        description = st.text_input(
-                                            "Description",
-                                            "Fees Payment",
-                                            key="payment_description_multi"
-                                        )
+                            df_terms = pd.DataFrame(term_summaries)
+                            df_display = df_terms.copy()
+                            df_display["Fees (UGX)"] = df_display["Fees (UGX)"].apply(lambda x: f"UGX {x:,.0f}")
+                            df_display["Paid (UGX)"] = df_display["Paid (UGX)"].apply(lambda x: f"UGX {x:,.0f}")
+                            df_display["Balance (UGX)"] = df_display["Balance (UGX)"].apply(lambda x: f"UGX {x:,.0f}")
 
-                                    if st.button("💸 Process Payment", use_container_width=True, type="primary"):
-                                        if amount_paid <= 0:
-                                            st.error("Please enter an amount greater than zero")
-                                        elif amount_paid > overall_balance:
-                                            st.warning(
-                                                f"⚠️ Payment amount (UGX {amount_paid:,.0f}) exceeds total outstanding (UGX {overall_balance:,.0f}). The excess will be credited for future terms.")
+                            st.dataframe(df_display[["Term", "Fees (UGX)", "Paid (UGX)", "Balance (UGX)", "Status"]],
+                                         use_container_width=True, height=300)
 
-                                        # Process payment according to allocation method
-                                        remaining_amount = amount_paid
-                                        payments_made = []
-                                        excess_amount = 0
+                            # Payment section
+                            st.markdown("---")
+                            st.markdown("## 💰 Make Payment")
 
-                                        if allocation_method == "Pay Oldest Debts First":
-                                            # Sort terms by year and term order
-                                            term_order = {"Term 1": 1, "Term 2": 2, "Term 3": 3}
-                                            outstanding_terms_sorted = outstanding_terms.sort_values(
-                                                by=["Year", "Term Name"],
-                                                key=lambda x: x.map(term_order) if x.name == "Term Name" else x
-                                            )
+                            if overall_balance <= 0:
+                                st.success(f"🎉 {pupil_name} has no outstanding balance!")
+                            else:
+                                st.warning(f"⚠️ Total amount due: UGX {overall_balance:,.0f}")
 
-                                            for _, row in outstanding_terms_sorted.iterrows():
-                                                if remaining_amount <= 0:
-                                                    break
+                                # Show outstanding terms only
+                                outstanding_terms = [t for t in term_summaries if t["Balance (UGX)"] > 0]
+                                if outstanding_terms:
+                                    with st.expander("📋 View outstanding terms"):
+                                        for term in outstanding_terms:
+                                            st.markdown(f"- **{term['Term']}**: UGX {term['Balance (UGX)']:,.0f}")
 
-                                                term_balance = row["Balance (UGX)"]
-                                                term_to_pay = row["Term Name"]
-                                                year_to_pay = row["Year"]
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    amount = st.number_input("Amount to Pay (UGX)", min_value=1000,
+                                                             value=min(overall_balance, 100000), step=50000,
+                                                             key="pay_amount_fixed")
+                                with col2:
+                                    desc = st.text_input("Description", "Fees Payment", key="pay_desc_fixed")
 
-                                                payment_for_this_term = min(remaining_amount, term_balance)
+                                if st.button("💸 Process Payment", use_container_width=True, type="primary"):
+                                    if amount < 1000:
+                                        st.error("Amount must be at least UGX 1,000")
+                                    else:
+                                        remaining = amount
+                                        payments_log = []
 
-                                                if payment_for_this_term > 0:
-                                                    trans_id, new_balance, receipt_no, prev_bal, excess = manager.add_payment(
-                                                        pupil_id, term_to_pay, year_to_pay, payment_for_this_term,
-                                                        f"{description} - {term_to_pay} {year_to_pay}"
-                                                    )
+                                        # Sort outstanding by year and term (oldest first)
+                                        outstanding_sorted = sorted(outstanding_terms,
+                                                                    key=lambda x: (
+                                                                    x["Year"], term_order_map.get(x["Term Name"], 0)))
 
-                                                    if trans_id:
-                                                        payments_made.append({
-                                                            "Term": f"{term_to_pay} {year_to_pay}",
-                                                            "Amount": payment_for_this_term,
-                                                            "Receipt": receipt_no
-                                                        })
-                                                        remaining_amount -= payment_for_this_term
-                                                        st.success(
-                                                            f"✅ Paid UGX {payment_for_this_term:,.0f} for {term_to_pay} {year_to_pay}")
+                                        for term_info in outstanding_sorted:
+                                            if remaining <= 0:
+                                                break
 
-                                            excess_amount = remaining_amount
+                                            term_name = term_info["Term Name"]
+                                            term_year = term_info["Year"]
+                                            balance_due = term_info["Balance (UGX)"]
 
-                                        elif allocation_method == "Pay Specific Term":
-                                            # Select which term to pay
-                                            term_options = [f"{row['Term']} (UGX {row['Balance (UGX)']:,.0f})" for
-                                                            _, row in outstanding_terms.iterrows()]
-                                            selected_term_str = st.selectbox("Select term to pay", term_options)
+                                            pay_amount = min(remaining, balance_due)
 
-                                            # Extract term and year from selection
-                                            selected_info = selected_term_str.split(" (")[0]
-                                            selected_term_parts = selected_info.split()
-                                            selected_term_name = f"{selected_term_parts[0]} {selected_term_parts[1]}" if len(
-                                                selected_term_parts) >= 2 else selected_term_parts[0]
-                                            selected_year = int(selected_term_parts[-1])
-
-                                            # Get the actual balance for that term
-                                            selected_row = \
-                                            outstanding_terms[outstanding_terms["Term"] == selected_info].iloc[0]
-                                            term_balance = selected_row["Balance (UGX)"]
-
-                                            payment_for_term = min(amount_paid, term_balance)
-
-                                            if payment_for_term > 0:
-                                                trans_id, new_balance, receipt_no, prev_bal, excess = manager.add_payment(
-                                                    pupil_id, selected_term_name, selected_year, payment_for_term,
-                                                    f"{description} - {selected_info}"
+                                            if pay_amount > 0:
+                                                trans_id, new_bal, receipt, prev_bal, excess = manager.add_payment(
+                                                    pupil_id, term_name, term_year, pay_amount,
+                                                    f"{desc} - {term_info['Term']}"
                                                 )
 
                                                 if trans_id:
-                                                    payments_made.append({
-                                                        "Term": selected_info,
-                                                        "Amount": payment_for_term,
-                                                        "Receipt": receipt_no
+                                                    payments_log.append({
+                                                        "Term": term_info["Term"],
+                                                        "Amount Paid": pay_amount,
+                                                        "Receipt": receipt
                                                     })
-                                                    remaining_amount = amount_paid - payment_for_term
-                                                    excess_amount = remaining_amount
-                                                    st.success(
-                                                        f"✅ Paid UGX {payment_for_term:,.0f} for {selected_info}")
+                                                    remaining -= pay_amount
+                                                    st.success(f"✅ Paid UGX {pay_amount:,.0f} for {term_info['Term']}")
 
-                                        else:  # Pay All Outstanding
-                                            # Pay as much as possible across all outstanding terms
-                                            for _, row in outstanding_terms.iterrows():
-                                                if remaining_amount <= 0:
-                                                    break
-
-                                                term_balance = row["Balance (UGX)"]
-                                                term_to_pay = row["Term Name"]
-                                                year_to_pay = row["Year"]
-
-                                                payment_for_this_term = min(remaining_amount, term_balance)
-
-                                                if payment_for_this_term > 0:
-                                                    trans_id, new_balance, receipt_no, prev_bal, excess = manager.add_payment(
-                                                        pupil_id, term_to_pay, year_to_pay, payment_for_this_term,
-                                                        f"{description} - {term_to_pay} {year_to_pay}"
-                                                    )
-
-                                                    if trans_id:
-                                                        payments_made.append({
-                                                            "Term": f"{term_to_pay} {year_to_pay}",
-                                                            "Amount": payment_for_this_term,
-                                                            "Receipt": receipt_no
-                                                        })
-                                                        remaining_amount -= payment_for_this_term
-                                                        st.success(
-                                                            f"✅ Paid UGX {payment_for_this_term:,.0f} for {term_to_pay} {year_to_pay}")
-
-                                            excess_amount = remaining_amount
-
-                                        # Summary of payment
-                                        if payments_made:
+                                        if payments_log:
                                             st.markdown("---")
                                             st.markdown("### 📋 Payment Summary")
+                                            st.dataframe(pd.DataFrame(payments_log), use_container_width=True)
 
-                                            df_summary = pd.DataFrame(payments_made)
-                                            st.dataframe(df_summary, use_container_width=True)
-
-                                            if excess_amount > 0:
-                                                st.info(
-                                                    f"💰 **Excess Payment:** UGX {excess_amount:,.0f} will be credited to the pupil's account for future terms.")
+                                            if remaining > 0:
+                                                st.info(f"💰 Excess payment: UGX {remaining:,.0f} will be credited")
 
                                             st.balloons()
-                                            st.success("✅ Payment processed successfully!")
-
-                                            # Clear cache and refresh
                                             cache.clear_all()
                                             time.sleep(2)
                                             st.rerun()
-                                        else:
-                                            st.error("Failed to process payment. Please try again.")
 
-                        except Exception as e:
-                            st.error(f"Error loading pupil data: {str(e)}")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+
+                elif selected_pupil and selected_pupil.get("is_sponsored", False):
+                    st.warning("⚠️ This is a sponsored child. No payment required.")
 
     # ------------------- CLASS REPORTS -------------------
     elif menu == "Class Reports":
