@@ -635,7 +635,7 @@ class FeesManager:
 
         try:
             result = supabase.table("term_enrollments") \
-                .select("pupil_id, pupils(*)") \
+                .select("pupil_id, term_fees, pupils(*)") \
                 .eq("term", term) \
                 .eq("year", year) \
                 .eq("is_active", True) \
@@ -648,6 +648,8 @@ class FeesManager:
                     if class_name == "All Classes" or pupil.get("class") == class_name:
                         if not include_archived and pupil.get("archived", False):
                             continue
+                        # Add the term-specific fee to the pupil dict
+                        pupil["term_fees_for_term"] = item.get("term_fees", pupil.get("term_fees", 0))
                         pupils.append(pupil)
 
             return pupils
@@ -722,6 +724,25 @@ class FeesManager:
         except:
             return []
 
+    def get_term_fees(self, pupil_id, term, year):
+        """Get the specific fee for a pupil in a particular term"""
+        if supabase is None:
+            return None
+
+        try:
+            result = supabase.table("term_enrollments") \
+                .select("term_fees") \
+                .eq("pupil_id", pupil_id) \
+                .eq("term", term) \
+                .eq("year", year) \
+                .execute()
+
+            if result.data:
+                return result.data[0].get("term_fees", 0)
+            return None
+        except:
+            return None
+
     def enroll_pupil(self, name, class_name, term_fees, pupil_type, current_term, current_year):
         """Enroll a NEW pupil - ONLY enrolls them in their starting term (not future terms)"""
         if supabase is None:
@@ -760,11 +781,12 @@ class FeesManager:
 
             supabase.table("pupils").insert(pupil_data).execute()
 
-            # ONLY enroll in the starting term (not future terms)
+            # Store the SPECIFIC term fee for this enrollment
             supabase.table("term_enrollments").insert({
                 "pupil_id": pupil_id,
                 "term": current_term,
                 "year": current_year,
+                "term_fees": term_fees,
                 "is_active": True,
                 "enrolled_at": datetime.datetime.now().isoformat()
             }).execute()
@@ -975,14 +997,22 @@ class FeesManager:
             if not pupil:
                 return False
 
+            # Get the CURRENT fee from pupils table (this will be the fee for the NEW term)
+            current_fee = pupil.get("term_fees", 0)
+
+            # If pupil is sponsored, fee should be 0
+            if pupil.get("is_sponsored", False):
+                current_fee = 0
+
             # Get previous term balance
             previous_balance = self.get_term_closing_balance(pupil_id, from_term, from_year)
 
-            # Enroll in term
+            # Enroll in term with the SPECIFIC fee for this term
             supabase.table("term_enrollments").insert({
                 "pupil_id": pupil_id,
                 "term": to_term,
                 "year": to_year,
+                "term_fees": current_fee,
                 "is_active": True,
                 "enrolled_at": datetime.datetime.now().isoformat()
             }).execute()
@@ -995,7 +1025,7 @@ class FeesManager:
 
             # If there's a balance (positive or negative), create an opening balance record
             if previous_balance != 0:
-                term_fees = pupil.get("term_fees", 0)
+                term_fees = current_fee
                 opening_id = str(uuid.uuid4())
                 receipt_no = f"BAL-CF-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
 
@@ -1070,18 +1100,52 @@ class FeesManager:
             return None, str(e), None, None, 0
 
     def get_class_summary(self, class_name, term, year, include_archived=False):
+        """Get class summary using term-specific fees"""
         if supabase is None:
             return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
         try:
-            result = supabase.rpc("get_class_summary", {
-                "p_class": class_name,
-                "p_term": term,
-                "p_year": int(year),
-                "p_include_archived": include_archived
-            }).execute()
+            # Get all enrolled pupils for this term
+            result = supabase.table("term_enrollments") \
+                .select("pupil_id, term_fees, pupils(*)") \
+                .eq("term", term) \
+                .eq("year", year) \
+                .execute()
 
-            summary_data = result.data
+            summary_data = []
+            for item in result.data:
+                pupil = item.get("pupils", {})
+                if not pupil:
+                    continue
+
+                if not include_archived and pupil.get("archived", False):
+                    continue
+
+                if class_name != "All Classes" and pupil.get("class") != class_name:
+                    continue
+
+                # Use term-specific fee
+                term_fee = item.get("term_fees", pupil.get("term_fees", 0))
+
+                # Get payments for this term
+                payments = self.get_ledger(pupil.get("id"), term, year)
+                total_paid = sum([p.get("amount", 0) for p in payments if p.get("amount", 0) > 0])
+                balance = term_fee - total_paid
+
+                status = "Cleared" if balance <= 0 else "Not Cleared"
+                if pupil.get("archived", False):
+                    status = "Archived (Left School)"
+
+                summary_data.append({
+                    "name": pupil.get("name"),
+                    "class": pupil.get("class"),
+                    "pupil_type": pupil.get("pupil_type"),
+                    "term_fees": term_fee,
+                    "total_paid": total_paid,
+                    "balance": balance,
+                    "status": status
+                })
+
             df_summary = pd.DataFrame(summary_data).reset_index(drop=True)
             if not df_summary.empty:
                 df_summary.insert(0, "No.", range(1, len(df_summary) + 1))
@@ -1090,7 +1154,7 @@ class FeesManager:
             df_not_cleared = df_summary[
                 df_summary["status"] == "Not Cleared"] if not df_summary.empty else pd.DataFrame()
             df_archived = df_summary[
-                df_summary["status"].str.contains("Archived", na=False)] if not df_summary.empty else pd.DataFrame()
+                df_summary["status"] == "Archived (Left School)"] if not df_summary.empty else pd.DataFrame()
 
             return df_summary, df_cleared, df_not_cleared, df_archived
         except Exception as e:
@@ -1098,6 +1162,7 @@ class FeesManager:
             return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     def get_school_wide_summary(self, term, year, include_archived=False):
+        """Get school-wide summary using term-specific fees"""
         cache_key = f"school_summary_{term}_{year}_{include_archived}"
         cached = cache.get(cache_key, "summary")
         if cached is not None:
@@ -1107,22 +1172,46 @@ class FeesManager:
             return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
         try:
+            # Get all enrolled pupils for this term
+            result = supabase.table("term_enrollments") \
+                .select("pupil_id, term_fees, pupils(*)") \
+                .eq("term", term) \
+                .eq("year", year) \
+                .execute()
+
             all_summaries = []
-            for class_name in self.classes:
-                result = supabase.rpc("get_class_summary", {
-                    "p_class": class_name,
-                    "p_term": term,
-                    "p_year": int(year),
-                    "p_include_archived": include_archived
-                }).execute()
+            for item in result.data:
+                pupil = item.get("pupils", {})
+                if not pupil:
+                    continue
 
-                for row in result.data:
-                    row["Class"] = class_name
-                    all_summaries.append(row)
+                if not include_archived and pupil.get("archived", False):
+                    continue
 
-            df_all = pd.DataFrame(all_summaries).reset_index(drop=True)
-            if not df_all.empty:
-                df_all.insert(0, "No.", range(1, len(df_all) + 1))
+                # Use term-specific fee
+                term_fee = item.get("term_fees", pupil.get("term_fees", 0))
+
+                # Get payments for this term
+                payments = self.get_ledger(pupil.get("id"), term, year)
+                total_paid = sum([p.get("amount", 0) for p in payments if p.get("amount", 0) > 0])
+                balance = term_fee - total_paid
+
+                status = "Cleared" if balance <= 0 else "Not Cleared"
+                if pupil.get("archived", False):
+                    status = "Archived (Left School)"
+
+                all_summaries.append({
+                    "No.": len(all_summaries) + 1,
+                    "name": pupil.get("name"),
+                    "class": pupil.get("class"),
+                    "pupil_type": pupil.get("pupil_type"),
+                    "Term Fees (UGX)": term_fee,
+                    "Total Paid (UGX)": total_paid,
+                    "Balance (UGX)": balance,
+                    "Status": status
+                })
+
+            df_all = pd.DataFrame(all_summaries)
 
             df_staff = df_all[df_all["pupil_type"] == "Staff Child"] if not df_all.empty else pd.DataFrame()
             df_shepherd = df_all[df_all["pupil_type"] == "Shepherd Child"] if not df_all.empty else pd.DataFrame()
@@ -1131,7 +1220,8 @@ class FeesManager:
             result = (df_all, df_staff, df_shepherd, df_community)
             cache.set(cache_key, result, "summary")
             return result
-        except:
+        except Exception as e:
+            st.error(f"Error getting school summary: {str(e)}")
             return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     def get_dashboard_stats(self, term, year):
@@ -1631,11 +1721,17 @@ def main_app():
                 if previous_balance is None:
                     previous_balance = 0
 
+                # Get the term-specific fee for this pupil
+                term_fee_for_this_term = manager.get_term_fees(pupil_id, current_term, current_year)
+                if term_fee_for_this_term is None:
+                    term_fee_for_this_term = term_fees  # Fallback to pupil's default fee
+
                 # Calculate financials with previous balance
                 credit_amount = abs(previous_balance) if previous_balance < 0 else 0
                 debt_amount = previous_balance if previous_balance > 0 else 0
 
-                total_due = debt_amount + term_fees
+                # Use term_fee_for_this_term instead of term_fees in calculations
+                total_due = debt_amount + term_fee_for_this_term
                 current_balance = max(0, total_due - total_paid_this_term - credit_amount)
 
                 # Calculate remaining credit after applying to this term
@@ -1646,37 +1742,33 @@ def main_app():
 
                 # Add opening balance if exists
                 opening_entries = [e for e in ledger_entries if
-                                   e.get("amount", 0) == 0 and "carried forward" in e.get("description", "").lower()]
+                                   e.get("amount", 0) == 0 and "carried forward" in str(e.get("description", "")).lower()]
                 for entry in opening_entries:
+                    excess_amt = entry.get('excess_amount', 0) or 0
+                    bal_amt = entry.get('balance', 0) or 0
                     all_transactions.append({
                         "S/No": 0,
-                        "Date": entry.get("payment_date", "")[:10] if entry.get("payment_date") else "",
+                        "Date": str(entry.get("payment_date", ""))[:10] if entry.get("payment_date") else "",
                         "Amount Paid": "UGX 0",
-                        "Credit Applied": f"UGX {entry.get('excess_amount', 0):,.0f}" if entry.get('excess_amount',
-                                                                                                   0) > 0 else "UGX 0",
-                        "Description": entry.get("description", ""),
-                        "Balance After": f"UGX {entry.get('balance', 0):,.0f}",
-                        "Receipt No": entry.get("receipt_no", "")
+                        "Credit Applied": f"UGX {excess_amt:,.0f}" if excess_amt > 0 else "UGX 0",
+                        "Description": str(entry.get("description", "")),
+                        "Balance After": f"UGX {bal_amt:,.0f}",
+                        "Receipt No": str(entry.get("receipt_no", ""))
                     })
 
                 # Add regular payments
                 payment_entries = [e for e in ledger_entries if e.get("amount", 0) > 0]
                 for idx, entry in enumerate(payment_entries, len(all_transactions) + 1):
-                    amount = entry.get('amount', 0)
-                    balance = entry.get('balance', 0)
-
+                    amount_val = entry.get('amount', 0) or 0
+                    balance_val = entry.get('balance', 0) or 0
                     all_transactions.append({
                         "S/No": idx,
-                        "Date": entry.get("payment_date", "")[:10] if entry.get("payment_date") else "",
-                        # "Amount Paid": f"UGX {amount:,.0f}",
-                        "Amount Paid": f"UGX {(amount if amount is not None else 0):,.0f}",
-                        # "Credit Applied": "UGX 0",
-                        "Credit Applied": f"UGX {(entry.get('excess_amount', 0) if entry.get('excess_amount', 0) is not None else 0):,.0f}" if entry.get(
-                            'excess_amount', 0) > 0 else "UGX 0",
-                        "Description": entry.get("description", "Payment"),
-                        # "Balance After": f"UGX {balance:,.0f}",
-                        "Balance After": f"UGX {(balance if balance is not None else 0):,.0f}",
-                        "Receipt No": entry.get("receipt_no", "")
+                        "Date": str(entry.get("payment_date", ""))[:10] if entry.get("payment_date") else "",
+                        "Amount Paid": f"UGX {amount_val:,.0f}",
+                        "Credit Applied": "UGX 0",
+                        "Description": str(entry.get("description", "Payment")),
+                        "Balance After": f"UGX {balance_val:,.0f}",
+                        "Receipt No": str(entry.get("receipt_no", ""))
                     })
 
                 # Create expander title with previous balance info
@@ -1686,11 +1778,11 @@ def main_app():
                     expander_title = f"📌 {pupil['name']} — {pupil_type} — 🎓 SPONSORED"
                 else:
                     if previous_balance > 0:
-                        expander_title = f"📌 {pupil['name']} — {pupil_type} — ⚠️ Previous Debt: UGX {previous_balance:,.0f} | This Term: UGX {term_fees:,.0f} | Paid: UGX {total_paid_this_term:,.0f} | Balance: UGX {current_balance:,.0f}"
+                        expander_title = f"📌 {pupil['name']} — {pupil_type} — ⚠️ Previous Debt: UGX {previous_balance:,.0f} | This Term: UGX {term_fee_for_this_term:,.0f} | Paid: UGX {total_paid_this_term:,.0f} | Balance: UGX {current_balance:,.0f}"
                     elif previous_balance < 0:
-                        expander_title = f"📌 {pupil['name']} — {pupil_type} — 💳 Previous Credit: UGX {abs(previous_balance):,.0f} | This Term: UGX {term_fees:,.0f} | Paid: UGX {total_paid_this_term:,.0f} | Balance: UGX {current_balance:,.0f}"
+                        expander_title = f"📌 {pupil['name']} — {pupil_type} — 💳 Previous Credit: UGX {abs(previous_balance):,.0f} | This Term: UGX {term_fee_for_this_term:,.0f} | Paid: UGX {total_paid_this_term:,.0f} | Balance: UGX {current_balance:,.0f}"
                     else:
-                        expander_title = f"📌 {pupil['name']} — {pupil_type} — Fees: UGX {term_fees:,.0f} | Paid: UGX {total_paid_this_term:,.0f} | Balance: UGX {current_balance:,.0f}"
+                        expander_title = f"📌 {pupil['name']} — {pupil_type} — Fees: UGX {term_fee_for_this_term:,.0f} | Paid: UGX {total_paid_this_term:,.0f} | Balance: UGX {current_balance:,.0f}"
 
                 with st.expander(expander_title):
                     # Show previous balance prominently
@@ -1720,24 +1812,26 @@ def main_app():
                             st.markdown("---")
                             st.markdown("### 📄 Receipts")
                             for entry in payment_entries:
-                                if st.button(f"🖨️ Receipt {entry.get('receipt_no', '')[-12:]}",
-                                             key=f"print_{entry.get('id', '')}"):
-                                    pdf_buffer = generate_pdf_receipt(
-                                        school_name="Shepherd Academy Busiu",
-                                        logo_path="images.jfif" if os.path.exists("images.jfif") else "",
-                                        receipt_num=entry.get('receipt_no', ''),
-                                        date_str=entry.get('payment_date', ''),
-                                        child_name=pupil['name'],
-                                        amount=entry.get('amount', 0),
-                                        description=entry.get('description', ''),
-                                        balance=entry.get('balance', 0),
-                                        previous_balance=entry.get('previous_balance', 0),
-                                        term_fees=term_fees,
-                                        signature_text="Bursar's Signature",
-                                        excess_amount=entry.get('excess_amount', 0)
-                                    )
-                                    st.download_button("📥 PDF", pdf_buffer,
-                                                       f"Receipt_{entry.get('receipt_no', '')}.pdf", "application/pdf")
+                                receipt_no = entry.get('receipt_no', '')
+                                if receipt_no:
+                                    if st.button(f"🖨️ Receipt {str(receipt_no)[-12:]}",
+                                                 key=f"print_{entry.get('id', '')}"):
+                                        pdf_buffer = generate_pdf_receipt(
+                                            school_name="Shepherd Academy Busiu",
+                                            logo_path="images.jfif" if os.path.exists("images.jfif") else "",
+                                            receipt_num=str(receipt_no),
+                                            date_str=str(entry.get('payment_date', '')),
+                                            child_name=pupil['name'],
+                                            amount=entry.get('amount', 0) or 0,
+                                            description=str(entry.get('description', '')),
+                                            balance=entry.get('balance', 0) or 0,
+                                            previous_balance=entry.get('previous_balance', 0) or 0,
+                                            term_fees=term_fee_for_this_term,
+                                            signature_text="Bursar's Signature",
+                                            excess_amount=entry.get('excess_amount', 0) or 0
+                                        )
+                                        st.download_button("📥 PDF", pdf_buffer,
+                                                           f"Receipt_{receipt_no}.pdf", "application/pdf")
                     else:
                         st.info(f"No payments for {current_term} {current_year}")
 
