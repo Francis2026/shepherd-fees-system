@@ -39,7 +39,7 @@ if "app_initialized" not in st.session_state:
     st.session_state.show_enrollment_dialog = False
     st.session_state.quick_pay_pupil = None
     st.session_state.quick_pay_name = ""
-    st.session_state.initialized_terms = {}  # Track which term/year combos are initialized
+    st.session_state.initialized_terms = {}
 
 # ------------------- Modern Color Scheme -------------------
 COLORS = {
@@ -62,153 +62,32 @@ COLORS = {
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
-    * {
-        font-family: 'Inter', sans-serif;
-    }
-
-    .main .block-container {
-        padding-top: 0rem !important;
-        padding-bottom: 2rem;
-        margin-top: 0rem !important;
-    }
-
-    header {
-        background: transparent !important;
-        padding: 0rem !important;
-        height: 0rem !important;
-        min-height: 0rem !important;
-    }
-
-    header .stDecoration {
-        display: none !important;
-    }
-
-    [data-testid="stSidebarCollapseButton"] {
-        display: flex !important;
-        background-color: #1E3A5F !important;
-        border-radius: 0 8px 8px 0 !important;
-        padding: 8px 10px !important;
-        margin-top: 20px !important;
-    }
-
-    [data-testid="stSidebarCollapseButton"] svg {
-        fill: white !important;
-    }
-
-    .stApp {
-        margin-top: 0rem;
-        padding-top: 0rem;
-    }
-
-    .main > div:first-child {
-        padding-top: 0rem !important;
-        margin-top: 0rem !important;
-    }
-
+    * { font-family: 'Inter', sans-serif; }
+    .main .block-container { padding-top: 0rem !important; padding-bottom: 2rem; margin-top: 0rem !important; }
+    header { background: transparent !important; padding: 0rem !important; height: 0rem !important; min-height: 0rem !important; }
+    header .stDecoration { display: none !important; }
+    [data-testid="stSidebarCollapseButton"] { display: flex !important; background-color: #1E3A5F !important; border-radius: 0 8px 8px 0 !important; padding: 8px 10px !important; margin-top: 20px !important; }
+    [data-testid="stSidebarCollapseButton"] svg { fill: white !important; }
+    .stApp { margin-top: 0rem; padding-top: 0rem; }
+    .main > div:first-child { padding-top: 0rem !important; margin-top: 0rem !important; }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-
-    section.main > div {
-        padding-top: 0rem !important;
-    }
-
-    .modern-card {
-        background: white;
-        border-radius: 20px;
-        padding: 1rem;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.05);
-        transition: transform 0.2s, box-shadow 0.2s;
-        border: 1px solid rgba(0,0,0,0.05);
-    }
-    .modern-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-    }
-
-    .stButton > button {
-        background: linear-gradient(135deg, #1E3A5F 0%, #2E5A8A 100%);
-        color: white;
-        border-radius: 12px;
-        border: none;
-        padding: 0.5rem 1rem;
-        font-weight: 600;
-        transition: all 0.3s ease;
-        width: 100%;
-        font-size: 0.85rem;
-    }
-    .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 20px rgba(30,58,95,0.3);
-    }
-
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1A1A2E 0%, #16213E 100%);
-        border-right: none;
-    }
-
-    [data-testid="stSidebar"] * {
-        color: #E8E8E8 !important;
-    }
-
-    [data-testid="stSidebar"] .stSelectbox label,
-    [data-testid="stSidebar"] .stNumberInput label {
-        color: #FFFFFF !important;
-        font-weight: 600 !important;
-        font-size: 13px !important;
-        margin-bottom: 5px !important;
-        display: block !important;
-    }
-
-    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] div,
-    [data-testid="stSidebar"] .stNumberInput input {
-        color: #1A1A2E !important;
-        background-color: #FFFFFF !important;
-    }
-
-    [data-testid="stSidebar"] h1, 
-    [data-testid="stSidebar"] h2, 
-    [data-testid="stSidebar"] h3, 
-    [data-testid="stSidebar"] h4 {
-        color: #A8B56C !important;
-        font-size: 1rem !important;
-    }
-
-    [data-testid="stSidebar"] .stMarkdown {
-        color: #E8E8E8 !important;
-    }
-
-    .stTextInput input, .stNumberInput input, .stSelectbox select, .stTextArea textarea {
-        border-radius: 12px;
-        border: 2px solid #E5E7EB;
-        padding: 0.5rem 1rem;
-    }
-
-    .dataframe {
-        border-radius: 16px !important;
-        overflow: hidden;
-    }
-    .dataframe thead tr th {
-        background: linear-gradient(135deg, #1E3A5F 0%, #2E5A8A 100%) !important;
-        color: white !important;
-        padding: 10px !important;
-        font-size: 0.8rem !important;
-    }
-
-    .streamlit-expanderHeader {
-        background: #F8F9FA;
-        border-radius: 12px;
-        font-weight: 600;
-    }
-
-    .badge-success, .badge-warning, .badge-info, .badge-secondary,
-    .badge-staff, .badge-shepherd, .badge-community {
-        padding: 2px 8px;
-        border-radius: 20px;
-        font-size: 0.7rem;
-        font-weight: 600;
-        display: inline-block;
-    }
+    section.main > div { padding-top: 0rem !important; }
+    .modern-card { background: white; border-radius: 20px; padding: 1rem; box-shadow: 0 10px 40px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; border: 1px solid rgba(0,0,0,0.05); }
+    .modern-card:hover { transform: translateY(-3px); box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
+    .stButton > button { background: linear-gradient(135deg, #1E3A5F 0%, #2E5A8A 100%); color: white; border-radius: 12px; border: none; padding: 0.5rem 1rem; font-weight: 600; transition: all 0.3s ease; width: 100%; font-size: 0.85rem; }
+    .stButton > button:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(30,58,95,0.3); }
+    [data-testid="stSidebar"] { background: linear-gradient(180deg, #1A1A2E 0%, #16213E 100%); border-right: none; }
+    [data-testid="stSidebar"] * { color: #E8E8E8 !important; }
+    [data-testid="stSidebar"] .stSelectbox label, [data-testid="stSidebar"] .stNumberInput label { color: #FFFFFF !important; font-weight: 600 !important; font-size: 13px !important; margin-bottom: 5px !important; display: block !important; }
+    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] div, [data-testid="stSidebar"] .stNumberInput input { color: #1A1A2E !important; background-color: #FFFFFF !important; }
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] h4 { color: #A8B56C !important; font-size: 1rem !important; }
+    [data-testid="stSidebar"] .stMarkdown { color: #E8E8E8 !important; }
+    .stTextInput input, .stNumberInput input, .stSelectbox select, .stTextArea textarea { border-radius: 12px; border: 2px solid #E5E7EB; padding: 0.5rem 1rem; }
+    .dataframe { border-radius: 16px !important; overflow: hidden; }
+    .dataframe thead tr th { background: linear-gradient(135deg, #1E3A5F 0%, #2E5A8A 100%) !important; color: white !important; padding: 10px !important; font-size: 0.8rem !important; }
+    .streamlit-expanderHeader { background: #F8F9FA; border-radius: 12px; font-weight: 600; }
+    .badge-success, .badge-warning, .badge-info, .badge-secondary, .badge-staff, .badge-shepherd, .badge-community { padding: 2px 8px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; display: inline-block; }
     .badge-success { background: #28A745; color: white; }
     .badge-warning { background: #FFC107; color: #333; }
     .badge-info { background: #17A2B8; color: white; }
@@ -216,105 +95,22 @@ st.markdown("""
     .badge-staff { background: #17A2B8; color: white; }
     .badge-shepherd { background: #20B2AA; color: white; }
     .badge-community { background: #6C757D; color: white; }
-
-    [data-testid="stSidebar"] .stRadio label {
-        color: #E8E8E8 !important;
-        font-size: 0.85rem !important;
-    }
-
-    [data-testid="stSidebar"] hr {
-        border-color: #2E5A8A !important;
-    }
-
-    .stButton > button:focus {
-        outline: none !important;
-        box-shadow: none !important;
-    }
-
-    ::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
-    }
-
-    ::-webkit-scrollbar-track {
-        background: #F1F1F1;
-        border-radius: 10px;
-    }
-
-    ::-webkit-scrollbar-thumb {
-        background: #1E3A5F;
-        border-radius: 10px;
-    }
-
-    .main-header {
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        padding: 8px 20px;
-        background: white;
-        border-radius: 0 0 0 20px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        margin-bottom: 15px;
-        position: sticky;
-        top: 0;
-        z-index: 999;
-    }
-
-    .header-content {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-    }
-
-    .header-logo {
-        width: 45px;
-        height: 45px;
-        border-radius: 50%;
-        object-fit: cover;
-        border: 2px solid #A8B56C;
-    }
-
-    .header-text {
-        text-align: right;
-    }
-
-    .header-title {
-        font-size: 1rem;
-        font-weight: 700;
-        color: #1E3A5F;
-        margin: 0;
-    }
-
-    .header-subtitle {
-        font-size: 0.65rem;
-        color: #6C757D;
-        margin: 0;
-    }
-
-    .metric-card {
-        background: white;
-        border-radius: 12px;
-        padding: 0.75rem;
-        text-align: center;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    }
-    .metric-value {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #1E3A5F;
-        margin: 0;
-    }
-    .metric-label {
-        font-size: 0.7rem;
-        color: #6C757D;
-        margin: 0;
-        font-weight: 600;
-    }
-
-    .main .block-container {
-        padding-top: 0rem !important;
-    }
-
+    [data-testid="stSidebar"] .stRadio label { color: #E8E8E8 !important; font-size: 0.85rem !important; }
+    [data-testid="stSidebar"] hr { border-color: #2E5A8A !important; }
+    .stButton > button:focus { outline: none !important; box-shadow: none !important; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #F1F1F1; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb { background: #1E3A5F; border-radius: 10px; }
+    .main-header { display: flex; justify-content: flex-end; align-items: center; padding: 8px 20px; background: white; border-radius: 0 0 0 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 15px; position: sticky; top: 0; z-index: 999; }
+    .header-content { display: flex; align-items: center; gap: 15px; }
+    .header-logo { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; border: 2px solid #A8B56C; }
+    .header-text { text-align: right; }
+    .header-title { font-size: 1rem; font-weight: 700; color: #1E3A5F; margin: 0; }
+    .header-subtitle { font-size: 0.65rem; color: #6C757D; margin: 0; }
+    .metric-card { background: white; border-radius: 12px; padding: 0.75rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    .metric-value { font-size: 1.5rem; font-weight: 700; color: #1E3A5F; margin: 0; }
+    .metric-label { font-size: 0.7rem; color: #6C757D; margin: 0; font-weight: 600; }
+    .main .block-container { padding-top: 0rem !important; }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .stAppDeployButton {display: none;}
@@ -403,7 +199,6 @@ def get_logo_base64():
 
 def display_main_header():
     logo_base64, mime_type = get_logo_base64()
-
     if logo_base64:
         st.markdown(f"""
         <div class="main-header">
@@ -517,13 +312,11 @@ def export_summary_to_pdf(df, title, filename):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4))
     elements = []
-
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], fontSize=16, spaceAfter=30,
                                  textColor=colors.HexColor('#1E3A5F'))
     elements.append(Paragraph(title, title_style))
     elements.append(Spacer(1, 12))
-
     data = [df.columns.tolist()] + df.values.tolist()
     table = Table(data)
     table.setStyle(TableStyle([
@@ -559,7 +352,7 @@ CLASS_PROGRESSION = {
 TERM_ORDER = ["Term 1", "Term 2", "Term 3"]
 
 
-# ==================== SUPABASE FEES MANAGER (FULLY FIXED) ====================
+# ==================== SUPABASE FEES MANAGER ====================
 class FeesManager:
     def __init__(self):
         self.classes = list(CLASS_PROGRESSION.keys())
@@ -575,10 +368,8 @@ class FeesManager:
         cached = cache.get(cache_key, "pupils")
         if cached is not None:
             return cached
-
         if supabase is None:
             return []
-
         try:
             query = supabase.table("pupils").select("*")
             if not include_archived:
@@ -596,10 +387,8 @@ class FeesManager:
         cached = cache.get(cache_key, "pupils")
         if cached is not None:
             return cached
-
         if supabase is None:
             return []
-
         try:
             result = supabase.table("pupils").select("*").eq("archived", True).execute()
             pupils = result.data
@@ -613,10 +402,8 @@ class FeesManager:
         return [p for p in all_pupils if p.get("class") == class_name]
 
     def is_pupil_enrolled_in_term(self, pupil_id, term, year):
-        """Check if a pupil is enrolled in a specific term"""
         if supabase is None:
             return False
-
         try:
             result = supabase.table("term_enrollments").select("id") \
                 .eq("pupil_id", pupil_id) \
@@ -629,10 +416,8 @@ class FeesManager:
             return False
 
     def get_pupils_for_term(self, class_name, term, year, include_archived=False):
-        """ONLY show pupils who are ENROLLED in this specific term via term_enrollments table"""
         if supabase is None:
             return []
-
         try:
             result = supabase.table("term_enrollments") \
                 .select("pupil_id, pupils(*)") \
@@ -640,7 +425,6 @@ class FeesManager:
                 .eq("year", year) \
                 .eq("is_active", True) \
                 .execute()
-
             pupils = []
             for item in result.data:
                 pupil = item.get("pupils", {})
@@ -649,19 +433,15 @@ class FeesManager:
                         if not include_archived and pupil.get("archived", False):
                             continue
                         pupils.append(pupil)
-
             return pupils
         except Exception as e:
             st.error(f"Error getting pupils for term: {str(e)}")
             return []
 
     def get_term_closing_balance(self, pupil_id, term, year):
-        """Get the closing balance for a specific term"""
         if supabase is None:
             return 0
-
         try:
-            # Get the last payment of the term
             result = supabase.table("payments").select("balance, excess_amount") \
                 .eq("pupil_id", pupil_id) \
                 .eq("term", term) \
@@ -669,13 +449,10 @@ class FeesManager:
                 .order("payment_date", desc=True) \
                 .limit(1) \
                 .execute()
-
             if result.data:
                 last_entry = result.data[0]
                 balance = last_entry.get("balance", 0)
                 excess = last_entry.get("excess_amount", 0)
-
-                # If balance is 0 but there's excess, return negative excess (credit)
                 if balance == 0 and excess > 0:
                     return -excess
                 return balance if balance is not None else 0
@@ -684,10 +461,8 @@ class FeesManager:
             return 0
 
     def get_previous_term_balance(self, pupil_id, current_term, current_year):
-        """Get the closing balance from the previous term to carry forward"""
         term_order = self.term_order
         current_order = term_order.get(current_term, 1)
-
         if current_order == 1:
             prev_year = current_year - 1
             prev_term = "Term 3"
@@ -697,7 +472,6 @@ class FeesManager:
         else:
             prev_term = "Term 2"
             prev_year = current_year
-
         return self.get_term_closing_balance(pupil_id, prev_term, prev_year)
 
     def get_ledger(self, pupil_id, term, year):
@@ -705,10 +479,8 @@ class FeesManager:
         cached = cache.get(cache_key, "ledger")
         if cached is not None:
             return cached
-
         if supabase is None:
             return []
-
         try:
             result = supabase.table("payments").select("*") \
                 .eq("pupil_id", pupil_id) \
@@ -723,11 +495,9 @@ class FeesManager:
             return []
 
     def enroll_pupil(self, name, class_name, term_fees, pupil_type, current_term, current_year):
-        """Enroll a NEW pupil - ONLY enrolls them in their starting term (not future terms)"""
         if supabase is None:
             st.error("Database not connected")
             return None
-
         try:
             if pupil_type == "Shepherd Child":
                 is_sponsored = True
@@ -739,9 +509,7 @@ class FeesManager:
             else:
                 is_sponsored = False
                 sponsor_reason = ""
-
             pupil_id = str(uuid.uuid4())
-
             pupil_data = {
                 "id": pupil_id,
                 "name": name,
@@ -757,10 +525,7 @@ class FeesManager:
                 "current_term": current_term,
                 "current_year": current_year
             }
-
             supabase.table("pupils").insert(pupil_data).execute()
-
-            # ONLY enroll in the starting term (not future terms)
             supabase.table("term_enrollments").insert({
                 "pupil_id": pupil_id,
                 "term": current_term,
@@ -768,7 +533,6 @@ class FeesManager:
                 "is_active": True,
                 "enrolled_at": datetime.datetime.now().isoformat()
             }).execute()
-
             cache.invalidate(data_type="pupils")
             cache.invalidate(data_type="stats")
             cache.invalidate(data_type="enrollments")
@@ -782,10 +546,8 @@ class FeesManager:
         cached = cache.get(cache_key, "pupils")
         if cached is not None:
             return cached
-
         if supabase is None:
             return None
-
         try:
             result = supabase.table("pupils").select("*").eq("id", pupil_id).execute()
             if result.data:
@@ -799,7 +561,6 @@ class FeesManager:
     def update_pupil(self, pupil_id, name, class_name, term_fees, pupil_type):
         if supabase is None:
             return False
-
         try:
             if pupil_type == "Shepherd Child":
                 is_sponsored = True
@@ -811,7 +572,6 @@ class FeesManager:
             else:
                 is_sponsored = False
                 sponsor_reason = ""
-
             supabase.table("pupils").update({
                 "name": name,
                 "class": class_name,
@@ -820,7 +580,6 @@ class FeesManager:
                 "is_sponsored": is_sponsored,
                 "sponsor_reason": sponsor_reason
             }).eq("id", pupil_id).execute()
-
             cache.invalidate(data_type="pupils")
             cache.invalidate(f"pupil_{pupil_id}")
             return True
@@ -829,32 +588,24 @@ class FeesManager:
             return False
 
     def archive_pupil(self, pupil_id, leaving_reason=""):
-        """Archive a pupil - deactivate future terms but keep historical data"""
         if supabase is None:
             return False
-
         try:
-            # Get current term/year from pupil
             pupil = self.get_pupil_details(pupil_id)
             if pupil:
-                # Only deactivate enrollment for the term they are leaving FROM
-                # Previous terms should remain active for historical accuracy
                 current_term = pupil.get("current_term", "Term 1")
                 current_year = pupil.get("current_year", 2024)
-
                 supabase.table("term_enrollments").update({"is_active": False}) \
                     .eq("pupil_id", pupil_id) \
                     .eq("term", current_term) \
                     .eq("year", current_year) \
                     .execute()
-
             supabase.table("pupils").update({
                 "active": False,
                 "archived": True,
                 "leaving_date": datetime.datetime.now().isoformat(),
                 "leaving_reason": leaving_reason
             }).eq("id", pupil_id).execute()
-
             cache.invalidate(data_type="pupils")
             cache.invalidate(f"pupil_{pupil_id}")
             cache.invalidate(data_type="enrollments")
@@ -866,7 +617,6 @@ class FeesManager:
     def restore_pupil(self, pupil_id, return_term, return_year):
         if supabase is None:
             return False
-
         try:
             supabase.table("pupils").update({
                 "active": True,
@@ -874,7 +624,6 @@ class FeesManager:
                 "current_term": return_term,
                 "current_year": return_year
             }).eq("id", pupil_id).execute()
-
             supabase.table("term_enrollments").insert({
                 "pupil_id": pupil_id,
                 "term": return_term,
@@ -882,7 +631,6 @@ class FeesManager:
                 "is_active": True,
                 "enrolled_at": datetime.datetime.now().isoformat()
             }).execute()
-
             cache.invalidate(data_type="pupils")
             cache.invalidate(f"pupil_{pupil_id}")
             cache.invalidate(data_type="enrollments")
@@ -892,48 +640,33 @@ class FeesManager:
             return False
 
     def initialize_existing_pupils_for_term(self, term, year):
-        """Initialize ONLY pupils whose enrollment date is BEFORE or AT this term"""
         if supabase is None:
             return 0
-
         try:
             init_key = f"{term}_{year}"
             if st.session_state.initialized_terms.get(init_key, False):
                 return 0
-
-            # Get all active, non-archived pupils
             pupils = self.get_all_pupils(include_archived=False)
             initialized_count = 0
-
             for pupil in pupils:
                 pupil_enrollment_term = pupil.get("enrollment_term", "Term 1")
                 pupil_enrollment_year = pupil.get("enrollment_year", year)
-
-                # Determine if this pupil should be enrolled in this term
                 term_order = {"Term 1": 1, "Term 2": 2, "Term 3": 3}
                 current_term_num = term_order.get(term, 1)
                 enrollment_term_num = term_order.get(pupil_enrollment_term, 1)
-
-                # Pupil should be enrolled if:
-                # 1. They enrolled in a previous year (always enrolled in all terms of current year)
-                # 2. They enrolled in the same year AND this term is >= their enrollment term
                 if pupil_enrollment_year < year:
                     should_enroll = True
                 elif pupil_enrollment_year == year:
                     should_enroll = (current_term_num >= enrollment_term_num)
                 else:
                     should_enroll = False
-
                 if not should_enroll:
                     continue
-
-                # Check if already enrolled
                 existing = supabase.table("term_enrollments").select("*") \
                     .eq("pupil_id", pupil["id"]) \
                     .eq("term", term) \
                     .eq("year", year) \
                     .execute()
-
                 if not existing.data:
                     supabase.table("term_enrollments").insert({
                         "pupil_id": pupil["id"],
@@ -943,11 +676,9 @@ class FeesManager:
                         "enrolled_at": datetime.datetime.now().isoformat()
                     }).execute()
                     initialized_count += 1
-
             if initialized_count > 0:
                 cache.invalidate(data_type="enrollments")
                 cache.invalidate(data_type="stats")
-
             st.session_state.initialized_terms[init_key] = True
             return initialized_count
         except Exception as e:
@@ -955,30 +686,20 @@ class FeesManager:
             return 0
 
     def enroll_pupil_into_term(self, pupil_id, to_term, to_year, from_term, from_year):
-        """Enroll a pupil from previous term into current term with balance carry-forward"""
         if supabase is None:
             return False
-
         try:
-            # Check if already enrolled in this term
             existing = supabase.table("term_enrollments").select("*") \
                 .eq("pupil_id", pupil_id) \
                 .eq("term", to_term) \
                 .eq("year", to_year) \
                 .execute()
-
             if existing.data:
                 return True
-
-            # Get pupil details
             pupil = self.get_pupil_details(pupil_id)
             if not pupil:
                 return False
-
-            # Get previous term balance
             previous_balance = self.get_term_closing_balance(pupil_id, from_term, from_year)
-
-            # Enroll in term
             supabase.table("term_enrollments").insert({
                 "pupil_id": pupil_id,
                 "term": to_term,
@@ -986,23 +707,16 @@ class FeesManager:
                 "is_active": True,
                 "enrolled_at": datetime.datetime.now().isoformat()
             }).execute()
-
-            # Update pupil's current term
             supabase.table("pupils").update({
                 "current_term": to_term,
                 "current_year": to_year
             }).eq("id", pupil_id).execute()
-
-            # If there's a balance (positive or negative), create an opening balance record
             if previous_balance != 0:
                 term_fees = pupil.get("term_fees", 0)
                 opening_id = str(uuid.uuid4())
                 receipt_no = f"BAL-CF-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
-
                 source_desc = f"{from_term} {from_year}"
-
                 if previous_balance < 0:
-                    # Credit balance
                     credit_amount = abs(previous_balance)
                     supabase.table("payments").insert({
                         "id": opening_id,
@@ -1019,7 +733,6 @@ class FeesManager:
                         "payment_date": datetime.datetime.now().isoformat()
                     }).execute()
                 else:
-                    # Debt balance
                     supabase.table("payments").insert({
                         "id": opening_id,
                         "pupil_id": pupil_id,
@@ -1034,7 +747,6 @@ class FeesManager:
                         "excess_amount": 0,
                         "payment_date": datetime.datetime.now().isoformat()
                     }).execute()
-
             cache.invalidate(data_type="pupils")
             cache.invalidate(data_type="ledger")
             cache.invalidate(data_type="summary")
@@ -1047,7 +759,6 @@ class FeesManager:
     def add_payment(self, pupil_id, term, year, amount, description):
         if supabase is None:
             return None, "Database not connected", None, None, 0
-
         try:
             result = supabase.rpc("process_payment", {
                 "p_pupil_id": pupil_id,
@@ -1056,12 +767,10 @@ class FeesManager:
                 "p_amount": amount,
                 "p_description": description
             }).execute()
-
             data = result.data
             cache.invalidate(data_type="stats")
             cache.invalidate(data_type="summary")
             cache.invalidate(data_type="ledger")
-
             return (data.get('payment_id'), data.get('new_balance'),
                     data.get('receipt_no'), data.get('previous_balance'),
                     data.get('excess_amount'))
@@ -1072,7 +781,6 @@ class FeesManager:
     def get_class_summary(self, class_name, term, year, include_archived=False):
         if supabase is None:
             return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
-
         try:
             result = supabase.rpc("get_class_summary", {
                 "p_class": class_name,
@@ -1080,18 +788,13 @@ class FeesManager:
                 "p_year": int(year),
                 "p_include_archived": include_archived
             }).execute()
-
             summary_data = result.data
             df_summary = pd.DataFrame(summary_data).reset_index(drop=True)
             if not df_summary.empty:
                 df_summary.insert(0, "No.", range(1, len(df_summary) + 1))
-
             df_cleared = df_summary[df_summary["status"] == "Cleared"] if not df_summary.empty else pd.DataFrame()
-            df_not_cleared = df_summary[
-                df_summary["status"] == "Not Cleared"] if not df_summary.empty else pd.DataFrame()
-            df_archived = df_summary[
-                df_summary["status"].str.contains("Archived", na=False)] if not df_summary.empty else pd.DataFrame()
-
+            df_not_cleared = df_summary[df_summary["status"] == "Not Cleared"] if not df_summary.empty else pd.DataFrame()
+            df_archived = df_summary[df_summary["status"].str.contains("Archived", na=False)] if not df_summary.empty else pd.DataFrame()
             return df_summary, df_cleared, df_not_cleared, df_archived
         except Exception as e:
             st.error(f"Error getting class summary: {str(e)}")
@@ -1102,10 +805,8 @@ class FeesManager:
         cached = cache.get(cache_key, "summary")
         if cached is not None:
             return cached
-
         if supabase is None:
             return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
-
         try:
             all_summaries = []
             for class_name in self.classes:
@@ -1115,19 +816,15 @@ class FeesManager:
                     "p_year": int(year),
                     "p_include_archived": include_archived
                 }).execute()
-
                 for row in result.data:
                     row["Class"] = class_name
                     all_summaries.append(row)
-
             df_all = pd.DataFrame(all_summaries).reset_index(drop=True)
             if not df_all.empty:
                 df_all.insert(0, "No.", range(1, len(df_all) + 1))
-
             df_staff = df_all[df_all["pupil_type"] == "Staff Child"] if not df_all.empty else pd.DataFrame()
             df_shepherd = df_all[df_all["pupil_type"] == "Shepherd Child"] if not df_all.empty else pd.DataFrame()
             df_community = df_all[df_all["pupil_type"] == "Community Child"] if not df_all.empty else pd.DataFrame()
-
             result = (df_all, df_staff, df_shepherd, df_community)
             cache.set(cache_key, result, "summary")
             return result
@@ -1139,7 +836,6 @@ class FeesManager:
         cached = cache.get(cache_key, "stats")
         if cached is not None:
             return cached
-
         if supabase is None:
             return {
                 "total_pupils": 0,
@@ -1151,7 +847,6 @@ class FeesManager:
                 "total_balance": 0,
                 "collection_rate": 0
             }
-
         try:
             enrolled_pupils = []
             result = supabase.table("term_enrollments") \
@@ -1160,12 +855,10 @@ class FeesManager:
                 .eq("year", int(year)) \
                 .eq("is_active", True) \
                 .execute()
-
             for item in result.data:
                 pupil = item.get("pupils", {})
                 if pupil and not pupil.get("archived", False):
                     enrolled_pupils.append(pupil)
-
             stats = {
                 "total_pupils": len(enrolled_pupils),
                 "staff_children": 0,
@@ -1176,39 +869,30 @@ class FeesManager:
                 "total_balance": 0,
                 "collection_rate": 0
             }
-
             for pupil in enrolled_pupils:
                 pupil_type = pupil.get("pupil_type", "Community Child")
                 term_fees = pupil.get("term_fees", 0)
                 is_sponsored = pupil.get("is_sponsored", False)
-
                 if is_sponsored:
                     term_fees = 0
-
                 if pupil_type == "Staff Child":
                     stats["staff_children"] += 1
                 elif pupil_type == "Shepherd Child":
                     stats["shepherd_children"] += 1
                 else:
                     stats["community_children"] += 1
-
                 stats["total_expected"] += term_fees
-
-                # Get total paid for this term (excluding opening balance entries)
                 result = supabase.table("payments").select("amount") \
                     .eq("pupil_id", pupil.get("id")) \
                     .eq("term", term) \
                     .eq("year", int(year)) \
                     .neq("amount", 0) \
                     .execute()
-
                 total_paid = sum([p.get("amount", 0) for p in result.data])
                 stats["total_collected"] += total_paid
-
             stats["total_balance"] = stats["total_expected"] - stats["total_collected"]
             if stats["total_expected"] > 0:
                 stats["collection_rate"] = (stats["total_collected"] / stats["total_expected"]) * 100
-
             cache.set(cache_key, stats, "stats")
             return stats
         except Exception as e:
@@ -1229,10 +913,8 @@ class FeesManager:
 def authenticate_user(username, password):
     if supabase is None:
         return None
-
     try:
         result = supabase.table("users").select("*").eq("username", username).execute()
-
         if result.data:
             user_data = result.data[0]
             stored_password = user_data.get("password", "")
@@ -1250,12 +932,9 @@ def login_page():
         with st.spinner("Loading Shepherd Academy School Fees Management System..."):
             time.sleep(0.5)
         st.session_state.login_loaded = True
-
     col1, col2, col3 = st.columns([1, 1.3, 1])
-
     with col2:
         logo_base64, mime_type = get_logo_base64()
-
         if logo_base64:
             st.markdown(f"""
             <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px; margin-top: 0px;">
@@ -1278,12 +957,10 @@ def login_page():
                 </div>
             </div>
             """, unsafe_allow_html=True)
-
         with st.form(key="login_form"):
             username = st.text_input("Username", placeholder="Enter your username")
             password = st.text_input("Password", type="password", placeholder="Enter your password")
             submitted = st.form_submit_button("Sign In", use_container_width=True)
-
             if submitted:
                 if not username or not password:
                     st.error("Please enter both username and password")
@@ -1301,18 +978,15 @@ def login_page():
 # ==================== MAIN APP ====================
 def main_app():
     display_main_header()
-
     with st.sidebar:
         role = st.session_state["role"]
-
         profile_image_path = "jane.jpg"
         if os.path.exists(profile_image_path):
             with open(profile_image_path, "rb") as img_file:
                 img_data = base64.b64encode(img_file.read()).decode()
             st.markdown(f"""
             <div style="display: flex; justify-content: center; margin-bottom: 10px;">
-                <img src="data:image/jpeg;base64,{img_data}" 
-                     style="width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 3px solid #A8B56C; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+                <img src="data:image/jpeg;base64,{img_data}" style="width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 3px solid #A8B56C; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
             </div>
             """, unsafe_allow_html=True)
         else:
@@ -1323,63 +997,41 @@ def main_app():
                 </div>
             </div>
             """, unsafe_allow_html=True)
-
         st.markdown(f"""
         <div style="text-align: center; margin-bottom: 5px;">
             <p style="font-weight: 600; font-size: 0.9rem; margin: 0; color: white;">Tukei Christine</p>
         </div>
         """, unsafe_allow_html=True)
-
         badge_class = "badge-success" if role == "bursar" else "badge-warning"
-        st.markdown(f"<div style='text-align: center;'><span class='{badge_class}'>{role.upper()}</span></div>",
-                    unsafe_allow_html=True)
-
+        st.markdown(f"<div style='text-align: center;'><span class='{badge_class}'>{role.upper()}</span></div>", unsafe_allow_html=True)
         st.markdown("---")
         st.markdown("### Navigation")
-
         if role == "bursar":
-            nav_options = ["Dashboard", "Enroll Pupil", "Pupils & Ledgers", "Record Payment",
-                           "Class Reports", "School Reports", "Manage Pupils", "Archived Pupils"]
+            nav_options = ["Dashboard", "Enroll Pupil", "Pupils & Ledgers", "Record Payment", "Class Reports", "School Reports", "Manage Pupils", "Archived Pupils"]
         else:
             nav_options = ["Dashboard", "Pupils & Ledgers", "Class Reports", "School Reports"]
-
-        selected_menu = st.radio(
-            "Menu",
-            nav_options,
-            key="nav_radio",
-            label_visibility="collapsed"
-        )
-
+        selected_menu = st.radio("Menu", nav_options, key="nav_radio", label_visibility="collapsed")
         st.session_state.navigation_menu = selected_menu
         menu = selected_menu
-
         st.markdown("---")
         st.markdown("### Period")
         current_term = st.selectbox("Term", ["Term 1", "Term 2", "Term 3"], key="global_term")
-        current_year = st.number_input("Year", min_value=2020, max_value=2030, value=datetime.datetime.now().year,
-                                       step=1)
-
+        current_year = st.number_input("Year", min_value=2020, max_value=2030, value=datetime.datetime.now().year, step=1)
         st.markdown("---")
-
-        # Term Enrollment Section
         if role == "bursar":
             st.markdown("### 📋 Term Enrollment")
-
             term_order_list = ["Term 1", "Term 2", "Term 3"]
             try:
                 current_idx = term_order_list.index(current_term)
             except:
                 current_idx = 0
-
             if current_idx == 0:
                 prev_term = "Term 3"
                 prev_year = current_year - 1
             else:
                 prev_term = term_order_list[current_idx - 1]
                 prev_year = current_year
-
             st.caption(f"Enroll pupils from {prev_term} {prev_year} into {current_term} {current_year}")
-
             if st.button("📝 Enroll Previous Term Pupils", use_container_width=True, key="enroll_prev_btn"):
                 st.session_state.show_enrollment_dialog = True
                 st.session_state.enroll_from_term = prev_term
@@ -1388,10 +1040,7 @@ def main_app():
                 st.session_state.enroll_to_year = current_year
                 st.rerun()
             st.markdown("---")
-
         manager = FeesManager()
-
-        # Initialize term data for the CURRENT term only
         if role == "bursar":
             init_key = f"{current_term}_{current_year}"
             if not st.session_state.initialized_terms.get(init_key, False):
@@ -1401,46 +1050,24 @@ def main_app():
                         st.success(f"✅ Initialized {initialized} existing pupils for {current_term} {current_year}")
                     time.sleep(0.5)
                     st.rerun()
-
-        # Show enrollment dialog if flag is set
         if st.session_state.get("show_enrollment_dialog", False):
             with st.expander("📋 Enroll Pupils", expanded=True):
-                prev_pupils = manager.get_pupils_for_term("All Classes",
-                                                          st.session_state.enroll_from_term,
-                                                          st.session_state.enroll_from_year,
-                                                          include_archived=False)
-
-                st.subheader(
-                    f"Enroll from {st.session_state.enroll_from_term} {st.session_state.enroll_from_year} to {st.session_state.enroll_to_term} {st.session_state.enroll_to_year}")
-
+                prev_pupils = manager.get_pupils_for_term("All Classes", st.session_state.enroll_from_term, st.session_state.enroll_from_year, include_archived=False)
+                st.subheader(f"Enroll from {st.session_state.enroll_from_term} {st.session_state.enroll_from_year} to {st.session_state.enroll_to_term} {st.session_state.enroll_to_year}")
                 selected_pupils = []
                 for pupil in prev_pupils:
-                    # Check if already enrolled
-                    already_enrolled = manager.is_pupil_enrolled_in_term(
-                        pupil.get("id"),
-                        st.session_state.enroll_to_term,
-                        st.session_state.enroll_to_year
-                    )
-
+                    already_enrolled = manager.is_pupil_enrolled_in_term(pupil.get("id"), st.session_state.enroll_to_term, st.session_state.enroll_to_year)
                     if already_enrolled:
                         st.info(f"✅ {pupil['name']} ({pupil['class']}) - Already enrolled")
                     else:
                         if st.checkbox(f"Enroll {pupil['name']} ({pupil['class']})", key=f"enroll_{pupil['id']}"):
                             selected_pupils.append(pupil)
-
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button(f"Enroll Selected ({len(selected_pupils)} pupils)", use_container_width=True):
                         for pupil in selected_pupils:
-                            manager.enroll_pupil_into_term(
-                                pupil['id'],
-                                st.session_state.enroll_to_term,
-                                st.session_state.enroll_to_year,
-                                st.session_state.enroll_from_term,
-                                st.session_state.enroll_from_year
-                            )
-                        st.success(
-                            f"✅ Enrolled {len(selected_pupils)} pupils into {st.session_state.enroll_to_term} {st.session_state.enroll_to_year}")
+                            manager.enroll_pupil_into_term(pupil['id'], st.session_state.enroll_to_term, st.session_state.enroll_to_year, st.session_state.enroll_from_term, st.session_state.enroll_from_year)
+                        st.success(f"✅ Enrolled {len(selected_pupils)} pupils into {st.session_state.enroll_to_term} {st.session_state.enroll_to_year}")
                         st.session_state.show_enrollment_dialog = False
                         cache.clear_all()
                         time.sleep(1)
@@ -1449,12 +1076,9 @@ def main_app():
                     if st.button("Cancel", use_container_width=True):
                         st.session_state.show_enrollment_dialog = False
                         st.rerun()
-
         if role == "bursar" and menu in ["Pupils & Ledgers", "Class Reports", "School Reports"]:
-            show_archived = st.checkbox("Show Archived Pupils", value=st.session_state.get("show_archived", False),
-                                        key="show_archived_checkbox")
+            show_archived = st.checkbox("Show Archived Pupils", value=st.session_state.get("show_archived", False), key="show_archived_checkbox")
             st.session_state.show_archived = show_archived
-
         if st.button("🚪 Logout", key="logout_btn", use_container_width=True):
             for key in ["logged_in", "username", "role", "navigation_menu", "show_archived", "initialized_terms"]:
                 if key in st.session_state:
@@ -1464,13 +1088,9 @@ def main_app():
 
     # ------------------- DASHBOARD -------------------
     if menu == "Dashboard":
-        st.markdown("<h2 style='color: #1E3A5F; margin-bottom: 0.5rem; font-size: 1.3rem;'>Dashboard</h2>",
-                    unsafe_allow_html=True)
-
+        st.markdown("<h2 style='color: #1E3A5F; margin-bottom: 0.5rem; font-size: 1.3rem;'>Dashboard</h2>", unsafe_allow_html=True)
         stats = manager.get_dashboard_stats(current_term, current_year)
-
         col1, col2, col3, col4, col5, col6 = st.columns(6)
-
         with col1:
             st.markdown(f"""
             <div style="background: white; border-radius: 12px; padding: 8px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
@@ -1478,7 +1098,6 @@ def main_app():
                 <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Total Pupils</p>
             </div>
             """, unsafe_allow_html=True)
-
         with col2:
             st.markdown(f"""
             <div style="background: white; border-radius: 12px; padding: 8px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
@@ -1486,7 +1105,6 @@ def main_app():
                 <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Staff Children</p>
             </div>
             """, unsafe_allow_html=True)
-
         with col3:
             st.markdown(f"""
             <div style="background: white; border-radius: 12px; padding: 8px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
@@ -1494,7 +1112,6 @@ def main_app():
                 <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Shepherd Children</p>
             </div>
             """, unsafe_allow_html=True)
-
         with col4:
             st.markdown(f"""
             <div style="background: white; border-radius: 12px; padding: 8px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
@@ -1502,7 +1119,6 @@ def main_app():
                 <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Community Children</p>
             </div>
             """, unsafe_allow_html=True)
-
         with col5:
             st.markdown(f"""
             <div style="background: white; border-radius: 12px; padding: 8px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
@@ -1510,7 +1126,6 @@ def main_app():
                 <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Total Collected</p>
             </div>
             """, unsafe_allow_html=True)
-
         with col6:
             st.markdown(f"""
             <div style="background: white; border-radius: 12px; padding: 8px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
@@ -1518,9 +1133,7 @@ def main_app():
                 <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Collection Rate</p>
             </div>
             """, unsafe_allow_html=True)
-
         col1, col2, col3 = st.columns(3)
-
         with col1:
             st.markdown(f"""
             <div style="background: white; border-radius: 12px; padding: 8px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
@@ -1528,7 +1141,6 @@ def main_app():
                 <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Total Expected</p>
             </div>
             """, unsafe_allow_html=True)
-
         with col2:
             st.markdown(f"""
             <div style="background: white; border-radius: 12px; padding: 8px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
@@ -1536,12 +1148,10 @@ def main_app():
                 <p style="font-size: 0.7rem; color: #6C757D; margin: 0;">Total Balance</p>
             </div>
             """, unsafe_allow_html=True)
-
         with col3:
             if stats["collection_rate"] > 0:
                 st.progress(stats["collection_rate"] / 100)
                 st.caption(f"📊 Progress: {stats['collection_rate']:.0f}%")
-
         st.markdown("---")
         st.markdown("<h3 style='font-size: 1.1rem;'>Quick Actions</h3>", unsafe_allow_html=True)
         col1, col2 = st.columns(2)
@@ -1558,25 +1168,21 @@ def main_app():
     elif menu == "Enroll Pupil" and role == "bursar":
         st.markdown("<h1 style='color: #1E3A5F; font-size: 1.5rem;'>Enroll New Pupil</h1>", unsafe_allow_html=True)
         st.caption(f"Enrolling for: **{current_term} {current_year}**")
-
         col1, col2 = st.columns(2)
         with col1:
             pupil_name = st.text_input("Full Name *", placeholder="Enter pupil's full name", key="enroll_name")
             pupil_class = st.selectbox("Class *", manager.classes, key="enroll_class")
             pupil_type = st.selectbox("Pupil Type *", manager.pupil_types, key="enroll_type")
         with col2:
-            term_fees = st.number_input("Fees Per Term (UGX)", min_value=0, step=0, value=500000, key="enroll_fees",
-                                        disabled=(pupil_type == "Shepherd Child"))
+            term_fees = st.number_input("Fees Per Term (UGX)", min_value=0, step=0, value=500000, key="enroll_fees", disabled=(pupil_type == "Shepherd Child"))
             if pupil_type == "Shepherd Child":
                 st.info("🙏 Shepherd Child - No fees required")
             elif pupil_type == "Staff Child":
                 st.info("👩‍🏫 Staff Child - Enter fees (can be 0)")
-
         if st.button("Enroll Pupil", use_container_width=True):
             if pupil_name:
                 actual_fees = 0 if pupil_type == "Shepherd Child" else term_fees
-                pupil_id = manager.enroll_pupil(pupil_name, pupil_class, actual_fees, pupil_type, current_term,
-                                                current_year)
+                pupil_id = manager.enroll_pupil(pupil_name, pupil_class, actual_fees, pupil_type, current_term, current_year)
                 if pupil_id:
                     st.success(f"✅ {pupil_name} enrolled as {pupil_type} for {current_term} {current_year}!")
                     st.balloons()
@@ -1585,31 +1191,25 @@ def main_app():
             else:
                 st.error("Please enter pupil name")
 
-    # ------------------- PUPILS & LEDGERS -------------------
+    # ------------------- PUPILS & LEDGERS (FIXED) -------------------
     elif menu == "Pupils & Ledgers":
         st.markdown("<h1 style='color: #1E3A5F; font-size: 1.5rem;'>Pupils & Ledgers</h1>", unsafe_allow_html=True)
-
         if st.session_state.show_archived:
             st.info(f"Showing **{current_term}, {current_year}** (INCLUDING ARCHIVED)")
         else:
             st.info(f"Showing **{current_term}, {current_year}** (Active pupils only)")
-
         col_class, col_search = st.columns([1, 2])
         with col_class:
             selected_class = st.selectbox("Select Class", manager.classes, key="ledger_class")
         with col_search:
             search_term = st.text_input("Search Pupil", placeholder="Type name to search...")
-
-        pupils = manager.get_pupils_for_term(selected_class, current_term, current_year,
-                                             include_archived=st.session_state.show_archived)
+        pupils = manager.get_pupils_for_term(selected_class, current_term, current_year, include_archived=st.session_state.show_archived)
         if search_term:
             pupils = [p for p in pupils if search_term.lower() in p.get("name", "").lower()]
-
         if not pupils:
             st.info(f"No pupils found in {selected_class} for {current_term} {current_year}")
         else:
             st.markdown(f"### {len(pupils)} pupil(s) in {selected_class}")
-
             for pupil in pupils:
                 pupil_id = pupil.get('id')
                 is_archived = pupil.get("archived", False)
@@ -1618,64 +1218,43 @@ def main_app():
                 sponsor_reason = pupil.get("sponsor_reason", "")
                 pupil_type = pupil.get("pupil_type", "Community Child")
                 enrollment_info = f"{pupil.get('enrollment_term', 'Term 1')} {pupil.get('enrollment_year', current_year)}"
-
-                # Get previous term balance (important for display)
                 previous_balance = manager.get_previous_term_balance(pupil_id, current_term, current_year)
-
-                # Get ledger entries (including opening balance if any)
                 ledger_entries = manager.get_ledger(pupil_id, current_term, current_year)
-
-                # Calculate total paid this term (excluding opening balance entries which have amount=0)
                 total_paid_this_term = sum([p.get("amount", 0) for p in ledger_entries if p.get("amount", 0) > 0])
-
                 if previous_balance is None:
                     previous_balance = 0
-
-                # Calculate financials with previous balance
                 credit_amount = abs(previous_balance) if previous_balance < 0 else 0
                 debt_amount = previous_balance if previous_balance > 0 else 0
-
                 total_due = debt_amount + term_fees
                 current_balance = max(0, total_due - total_paid_this_term - credit_amount)
-
-                # Calculate remaining credit after applying to this term
                 remaining_credit = max(0, credit_amount - total_paid_this_term)
-
-                # Build transaction list for display
                 all_transactions = []
-
-                # Add opening balance if exists
-                opening_entries = [e for e in ledger_entries if
-                                   e.get("amount", 0) == 0 and "carried forward" in e.get("description", "").lower()]
+                opening_entries = [e for e in ledger_entries if e.get("amount", 0) == 0 and "carried forward" in str(e.get("description", "")).lower()]
                 for entry in opening_entries:
+                    excess_amt = entry.get('excess_amount', 0) or 0
+                    bal_amt = entry.get('balance', 0) or 0
                     all_transactions.append({
                         "S/No": 0,
-                        "Date": entry.get("payment_date", "")[:10] if entry.get("payment_date") else "",
+                        "Date": str(entry.get("payment_date", ""))[:10] if entry.get("payment_date") else "",
                         "Amount Paid": "UGX 0",
-                        "Credit Applied": f"UGX {entry.get('excess_amount', 0):,.0f}" if entry.get('excess_amount',
-                                                                                                   0) > 0 else "UGX 0",
-                        "Description": entry.get("description", ""),
-                        "Balance After": f"UGX {entry.get('balance', 0):,.0f}",
-                        "Receipt No": entry.get("receipt_no", "")
+                        "Credit Applied": f"UGX {excess_amt:,.0f}" if excess_amt > 0 else "UGX 0",
+                        "Description": str(entry.get("description", "")),
+                        "Balance After": f"UGX {bal_amt:,.0f}",
+                        "Receipt No": str(entry.get("receipt_no", ""))
                     })
-
-                # Add regular payments
                 payment_entries = [e for e in ledger_entries if e.get("amount", 0) > 0]
                 for idx, entry in enumerate(payment_entries, len(all_transactions) + 1):
-                    amount = entry.get('amount', 0)
-                    balance = entry.get('balance', 0)
-
+                    amount_val = entry.get('amount', 0) or 0
+                    balance_val = entry.get('balance', 0) or 0
                     all_transactions.append({
                         "S/No": idx,
-                        "Date": entry.get("payment_date", "")[:10] if entry.get("payment_date") else "",
-                        "Amount Paid": f"UGX {amount:,.0f}",
+                        "Date": str(entry.get("payment_date", ""))[:10] if entry.get("payment_date") else "",
+                        "Amount Paid": f"UGX {amount_val:,.0f}",
                         "Credit Applied": "UGX 0",
-                        "Description": entry.get("description", "Payment"),
-                        "Balance After": f"UGX {balance:,.0f}",
-                        "Receipt No": entry.get("receipt_no", "")
+                        "Description": str(entry.get("description", "Payment")),
+                        "Balance After": f"UGX {balance_val:,.0f}",
+                        "Receipt No": str(entry.get("receipt_no", ""))
                     })
-
-                # Create expander title with previous balance info
                 if is_archived:
                     expander_title = f"📌 {pupil['name']} — {pupil_type} — [ARCHIVED]"
                 elif is_sponsored:
@@ -1687,14 +1266,11 @@ def main_app():
                         expander_title = f"📌 {pupil['name']} — {pupil_type} — 💳 Previous Credit: UGX {abs(previous_balance):,.0f} | This Term: UGX {term_fees:,.0f} | Paid: UGX {total_paid_this_term:,.0f} | Balance: UGX {current_balance:,.0f}"
                     else:
                         expander_title = f"📌 {pupil['name']} — {pupil_type} — Fees: UGX {term_fees:,.0f} | Paid: UGX {total_paid_this_term:,.0f} | Balance: UGX {current_balance:,.0f}"
-
                 with st.expander(expander_title):
-                    # Show previous balance prominently
                     if previous_balance > 0:
                         st.warning(f"💰 **Previous Term Balance (Debt Carried Forward):** UGX {previous_balance:,.0f}")
                     elif previous_balance < 0:
                         st.success(f"💳 **Previous Term Credit Carried Forward:** UGX {abs(previous_balance):,.0f}")
-
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         st.caption(f"📅 Enrolled: {enrollment_info}")
@@ -1706,447 +1282,206 @@ def main_app():
                     with col4:
                         if remaining_credit > 0:
                             st.success(f"💳 Remaining Credit: UGX {remaining_credit:,.0f}")
-
                     if all_transactions:
                         df = pd.DataFrame(all_transactions)
                         st.dataframe(df, use_container_width=True, height=min(400, 35 * len(df) + 38))
-
-                        # Receipt buttons for payment entries
                         if payment_entries:
                             st.markdown("---")
                             st.markdown("### 📄 Receipts")
                             for entry in payment_entries:
-                                if st.button(f"🖨️ Receipt {entry.get('receipt_no', '')[-12:]}",
-                                             key=f"print_{entry.get('id', '')}"):
-                                    pdf_buffer = generate_pdf_receipt(
-                                        school_name="Shepherd Academy Busiu",
-                                        logo_path="images.jfif" if os.path.exists("images.jfif") else "",
-                                        receipt_num=entry.get('receipt_no', ''),
-                                        date_str=entry.get('payment_date', ''),
-                                        child_name=pupil['name'],
-                                        amount=entry.get('amount', 0),
-                                        description=entry.get('description', ''),
-                                        balance=entry.get('balance', 0),
-                                        previous_balance=entry.get('previous_balance', 0),
-                                        term_fees=term_fees,
-                                        signature_text="Bursar's Signature",
-                                        excess_amount=entry.get('excess_amount', 0)
-                                    )
-                                    st.download_button("📥 PDF", pdf_buffer,
-                                                       f"Receipt_{entry.get('receipt_no', '')}.pdf", "application/pdf")
+                                receipt_no = entry.get('receipt_no', '')
+                                if receipt_no:
+                                    if st.button(f"🖨️ Receipt {str(receipt_no)[-12:]}", key=f"print_{entry.get('id', '')}"):
+                                        pdf_buffer = generate_pdf_receipt(
+                                            school_name="Shepherd Academy Busiu",
+                                            logo_path="images.jfif" if os.path.exists("images.jfif") else "",
+                                            receipt_num=str(receipt_no),
+                                            date_str=str(entry.get('payment_date', '')),
+                                            child_name=pupil['name'],
+                                            amount=entry.get('amount', 0) or 0,
+                                            description=str(entry.get('description', '')),
+                                            balance=entry.get('balance', 0) or 0,
+                                            previous_balance=entry.get('previous_balance', 0) or 0,
+                                            term_fees=term_fees,
+                                            signature_text="Bursar's Signature",
+                                            excess_amount=entry.get('excess_amount', 0) or 0
+                                        )
+                                        st.download_button("📥 PDF", pdf_buffer, f"Receipt_{receipt_no}.pdf", "application/pdf")
                     else:
                         st.info(f"No payments for {current_term} {current_year}")
-
                     if role == "bursar" and not is_sponsored and not is_archived:
-                        if st.button(f"💰 Record Payment for {pupil['name']}", key=f"pay_{pupil_id}",
-                                     use_container_width=True):
+                        if st.button(f"💰 Record Payment for {pupil['name']}", key=f"pay_{pupil_id}", use_container_width=True):
                             st.session_state.navigation_menu = "Record Payment"
                             st.session_state.quick_pay_pupil = pupil_id
                             st.session_state.quick_pay_name = pupil['name']
                             st.rerun()
 
-    # ==================== RECORD PAYMENT SECTION (REDESIGNED) ====================
+    # ------------------- RECORD PAYMENT (MULTI-TERM VERSION) -------------------
     elif menu == "Record Payment" and role == "bursar":
-        st.markdown("<h1 style='color: #1E3A5F; font-size: 1.5rem;'>Record Payment</h1>", unsafe_allow_html=True)
-
-        # Get ALL pupils (active only)
+        st.markdown("<h1 style='color: #1E3A5F; font-size: 1.5rem;'>💰 Record Payment - All Terms</h1>", unsafe_allow_html=True)
+        st.info("✅ **VERSION 2.0 - Shows ALL terms the pupil has ever been enrolled in**")
         all_active_pupils = manager.get_all_pupils(include_archived=False)
-
         if not all_active_pupils:
             st.warning("No active pupils found in the system.")
         else:
-            # Search/Filter for pupil
             col_filter1, col_filter2 = st.columns([1, 2])
             with col_filter1:
-                filter_class = st.selectbox("Filter by Class", ["All Classes"] + manager.classes,
-                                            key="filter_payment_class")
+                filter_class = st.selectbox("Filter by Class", ["All Classes"] + manager.classes, key="filter_class_new")
             with col_filter2:
-                search_term = st.text_input("Search by Name", placeholder="Type name...", key="search_payment_pupil")
-
+                search_term = st.text_input("Search by Name", placeholder="Type name...", key="search_name_new")
             pupil_dicts = [p for p in all_active_pupils if not p.get("archived", False)]
-
             if filter_class != "All Classes":
                 pupil_dicts = [p for p in pupil_dicts if p.get("class") == filter_class]
             if search_term:
                 pupil_dicts = [p for p in pupil_dicts if search_term.lower() in p.get("name", "").lower()]
-
             if not pupil_dicts:
                 st.warning("No pupils found")
             else:
                 pupil_options = {f"{p['name']} ({p['class']})": p['id'] for p in pupil_dicts}
-
-                # Check if coming from quick pay
-                if "quick_pay_pupil" in st.session_state:
+                if "quick_pay_pupil" in st.session_state and st.session_state.quick_pay_pupil:
                     pupil_id = st.session_state.quick_pay_pupil
                     pupil_name = st.session_state.quick_pay_name
                     selected_pupil = next((p for p in pupil_dicts if p['id'] == pupil_id), None)
-                    if not selected_pupil:
-                        del st.session_state.quick_pay_pupil
-                        del st.session_state.quick_pay_name
-                        st.rerun()
+                    if selected_pupil:
+                        st.success(f"✅ Selected: {pupil_name}")
+                        st.session_state.quick_pay_pupil = None
+                        st.session_state.quick_pay_name = None
                     else:
-                        st.success(f"Selected: {pupil_name}")
+                        st.rerun()
                 else:
-                    selected = st.selectbox("Select Pupil", list(pupil_options.keys()), key="payment_pupil")
+                    selected = st.selectbox("Select Pupil", list(pupil_options.keys()), key="select_pupil_new")
                     pupil_id = pupil_options[selected]
                     pupil_name = selected.split(" (")[0]
                     selected_pupil = next((p for p in pupil_dicts if p['id'] == pupil_id), None)
-
-                if selected_pupil:
+                if selected_pupil and not selected_pupil.get("is_sponsored", False):
                     pupil_data = selected_pupil
-                    current_term_fees = pupil_data.get("term_fees", 0)
-                    is_sponsored = pupil_data.get("is_sponsored", False)
-                    pupil_type = pupil_data.get("pupil_type", "Community Child")
-
-                    if is_sponsored:
-                        st.warning("⚠️ This is a sponsored child. No payment required.")
-                    else:
-                        # ========== FETCH ALL TERM ENROLLMENTS FOR THIS PUPIL ==========
-                        st.markdown("---")
-                        st.markdown("## 📋 Complete Fee History")
-
-                        # Get all term enrollments for this pupil
-                        try:
-                            result = supabase.table("term_enrollments") \
-                                .select("term, year, is_active") \
-                                .eq("pupil_id", pupil_id) \
-                                .order("year", desc=False) \
-                                .order("term", desc=False) \
-                                .execute()
-
-                            enrolled_terms = result.data
-
-                            if not enrolled_terms:
-                                st.warning(
-                                    f"No term enrollment records found for {pupil_name}. Please enroll the pupil first.")
-                            else:
-                                # Build complete fee summary across all terms
-                                term_summaries = []
-                                total_outstanding = 0
-                                total_fees_all_terms = 0
-                                total_paid_all_terms = 0
-
-                                for enrollment in enrolled_terms:
-                                    term = enrollment["term"]
-                                    year = enrollment["year"]
-                                    is_active = enrollment.get("is_active", True)
-
-                                    # Get term fees for this pupil (use current fees for all terms, or store historical)
-                                    term_fee = current_term_fees
-
-                                    # Get payments for this term
-                                    payments = manager.get_ledger(pupil_id, term, year)
-
-                                    # Calculate total paid (excluding opening balance entries with amount=0)
-                                    paid_this_term = sum(
-                                        [p.get("amount", 0) for p in payments if p.get("amount", 0) > 0])
-
-                                    # Get closing balance for this term
-                                    closing_balance = manager.get_term_closing_balance(pupil_id, term, year)
-
-                                    # Calculate if term is cleared
-                                    is_cleared = closing_balance <= 0 if closing_balance is not None else (
-                                                paid_this_term >= term_fee)
-
-                                    # Determine status
-                                    if not is_active:
-                                        status = "🔴 Inactive"
-                                    elif is_cleared:
-                                        status = "✅ Cleared"
-                                    elif closing_balance and closing_balance > 0:
-                                        status = "⚠️ Outstanding"
-                                        total_outstanding += closing_balance
-                                    else:
-                                        due = term_fee - paid_this_term
-                                        if due > 0:
-                                            status = "⚠️ Outstanding"
-                                            total_outstanding += due
-                                        else:
-                                            status = "✅ Cleared"
-
-                                    term_summaries.append({
-                                        "Term": f"{term} {year}",
-                                        "Term Name": term,
-                                        "Year": year,
-                                        "Fees (UGX)": term_fee,
-                                        "Paid (UGX)": paid_this_term,
-                                        "Balance (UGX)": closing_balance if closing_balance is not None else (
-                                                    term_fee - paid_this_term),
-                                        "Status": status,
-                                        "Is Active": is_active
-                                    })
-
-                                    total_fees_all_terms += term_fee
-                                    total_paid_all_terms += paid_this_term
-
-                                # Create DataFrame for display
-                                df_terms = pd.DataFrame(term_summaries)
-
-                                # Calculate overall balance
-                                overall_balance = total_fees_all_terms - total_paid_all_terms
-
-                                # ========== DISPLAY SUMMARY CARDS ==========
-                                col1, col2, col3, col4 = st.columns(4)
-
-                                with col1:
-                                    st.markdown(f"""
-                                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 15px; text-align: center;">
-                                        <p style="color: white; margin: 0; font-size: 0.8rem;">Total Terms Enrolled</p>
-                                        <h2 style="color: white; margin: 0; font-size: 2rem;">{len(term_summaries)}</h2>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-
-                                with col2:
-                                    st.markdown(f"""
-                                    <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border-radius: 12px; padding: 15px; text-align: center;">
-                                        <p style="color: white; margin: 0; font-size: 0.8rem;">Total Fees</p>
-                                        <h3 style="color: white; margin: 0; font-size: 1.3rem;">UGX {total_fees_all_terms:,.0f}</h3>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-
-                                with col3:
-                                    st.markdown(f"""
-                                    <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); border-radius: 12px; padding: 15px; text-align: center;">
-                                        <p style="color: white; margin: 0; font-size: 0.8rem;">Total Paid</p>
-                                        <h3 style="color: white; margin: 0; font-size: 1.3rem;">UGX {total_paid_all_terms:,.0f}</h3>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-
-                                with col4:
-                                    balance_color = "#28a745" if overall_balance <= 0 else "#dc3545"
-                                    balance_text = "Credit" if overall_balance < 0 else "Outstanding"
-                                    st.markdown(f"""
-                                    <div style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); border-radius: 12px; padding: 15px; text-align: center;">
-                                        <p style="color: white; margin: 0; font-size: 0.8rem;">{balance_text}</p>
-                                        <h3 style="color: white; margin: 0; font-size: 1.3rem;">UGX {abs(overall_balance):,.0f}</h3>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-
-                                # ========== TERM-BY-TERM BREAKDOWN TABLE ==========
-                                st.markdown("---")
-                                st.markdown("### 📊 Term-by-Term Breakdown")
-
-                                # Style the DataFrame
-                                def style_balance(val):
-                                    if val > 0:
-                                        return 'color: #dc3545; font-weight: bold'
-                                    elif val < 0:
-                                        return 'color: #28a745; font-weight: bold'
-                                    return 'color: #6c757d'
-
-                                styled_df = df_terms.style.format({
-                                    "Fees (UGX)": "UGX {:,.0f}",
-                                    "Paid (UGX)": "UGX {:,.0f}",
-                                    "Balance (UGX)": "UGX {:,.0f}"
-                                }).applymap(style_balance, subset=["Balance (UGX)"])
-
-                                st.dataframe(styled_df, use_container_width=True, height=400)
-
-                                # ========== PAYMENT SECTION ==========
-                                st.markdown("---")
-                                st.markdown("## 💰 Make Payment")
-
-                                if overall_balance <= 0:
-                                    st.success(
-                                        f"🎉 **Great news!** {pupil_name} has no outstanding balance. Total credit: UGX {abs(overall_balance):,.0f}")
+                    st.markdown("---")
+                    st.markdown(f"## 📋 Fee History for: {pupil_name}")
+                    st.caption(f"Class: {pupil_data['class']} | Type: {pupil_data.get('pupil_type', 'Community Child')}")
+                    try:
+                        term_enrollments = supabase.table("term_enrollments") \
+                            .select("term, year, is_active") \
+                            .eq("pupil_id", pupil_id) \
+                            .order("year", desc=False) \
+                            .execute()
+                        enrolled_terms = term_enrollments.data
+                        if not enrolled_terms:
+                            st.warning(f"No term enrollment records found for {pupil_name}. Please use the Term Enrollment section in the sidebar to enroll this pupil.")
+                        else:
+                            term_data = []
+                            total_fees = 0
+                            total_paid = 0
+                            for enrollment in enrolled_terms:
+                                term = enrollment["term"]
+                                year = enrollment["year"]
+                                payments = manager.get_ledger(pupil_id, term, year)
+                                paid = sum([p.get("amount", 0) for p in payments if p.get("amount", 0) > 0])
+                                closing_bal = manager.get_term_closing_balance(pupil_id, term, year)
+                                term_fee_val = pupil_data.get("term_fees", 0)
+                                term_data.append({
+                                    "Term": f"{term} {year}",
+                                    "Fees": term_fee_val,
+                                    "Paid": paid,
+                                    "Balance": closing_bal if closing_bal is not None else (term_fee_val - paid),
+                                    "Status": "✅ Cleared" if (closing_bal if closing_bal is not None else (term_fee_val - paid)) <= 0 else "⚠️ Outstanding"
+                                })
+                                total_fees += term_fee_val
+                                total_paid += paid
+                            overall_balance = total_fees - total_paid
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("📚 Terms Enrolled", len(enrolled_terms))
+                            with col2:
+                                st.metric("💰 Total Fees", f"UGX {total_fees:,.0f}")
+                            with col3:
+                                st.metric("✅ Total Paid", f"UGX {total_paid:,.0f}")
+                            with col4:
+                                if overall_balance > 0:
+                                    st.metric("⚠️ Total Due", f"UGX {overall_balance:,.0f}", delta="Outstanding")
                                 else:
-                                    st.warning(f"⚠️ **Total Outstanding Balance:** UGX {overall_balance:,.0f}")
-
-                                    # Show breakdown of outstanding terms only
-                                    outstanding_terms = df_terms[df_terms["Balance (UGX)"] > 0]
-                                    if not outstanding_terms.empty:
-                                        st.markdown("#### Outstanding Terms:")
-                                        for _, row in outstanding_terms.iterrows():
-                                            st.markdown(f"- **{row['Term']}**: UGX {row['Balance (UGX)']:,.0f}")
-
-                                    st.markdown("---")
-
-                                    # Payment allocation method
-                                    allocation_method = st.radio(
-                                        "Payment Allocation Method",
-                                        ["Pay Oldest Debts First", "Pay Specific Term", "Pay All Outstanding"],
-                                        horizontal=True,
-                                        help="Choose how to allocate the payment across outstanding terms"
-                                    )
-
-                                    col1, col2 = st.columns(2)
-
-                                    with col1:
-                                        amount_paid = st.number_input(
-                                            "Amount to Pay (UGX)",
-                                            min_value=0,
-                                            value=min(overall_balance, 500000),
-                                            step=50000,
-                                            key="payment_amount_multi"
-                                        )
-
-                                    with col2:
-                                        description = st.text_input(
-                                            "Description",
-                                            "Fees Payment",
-                                            key="payment_description_multi"
-                                        )
-
-                                    if st.button("💸 Process Payment", use_container_width=True, type="primary"):
-                                        if amount_paid <= 0:
-                                            st.error("Please enter an amount greater than zero")
-                                        elif amount_paid > overall_balance:
-                                            st.warning(
-                                                f"⚠️ Payment amount (UGX {amount_paid:,.0f}) exceeds total outstanding (UGX {overall_balance:,.0f}). The excess will be credited for future terms.")
-
-                                        # Process payment according to allocation method
-                                        remaining_amount = amount_paid
-                                        payments_made = []
-                                        excess_amount = 0
-
-                                        if allocation_method == "Pay Oldest Debts First":
-                                            # Sort terms by year and term order
-                                            term_order = {"Term 1": 1, "Term 2": 2, "Term 3": 3}
-                                            outstanding_terms_sorted = outstanding_terms.sort_values(
-                                                by=["Year", "Term Name"],
-                                                key=lambda x: x.map(term_order) if x.name == "Term Name" else x
-                                            )
-
-                                            for _, row in outstanding_terms_sorted.iterrows():
-                                                if remaining_amount <= 0:
-                                                    break
-
-                                                term_balance = row["Balance (UGX)"]
-                                                term_to_pay = row["Term Name"]
-                                                year_to_pay = row["Year"]
-
-                                                payment_for_this_term = min(remaining_amount, term_balance)
-
-                                                if payment_for_this_term > 0:
-                                                    trans_id, new_balance, receipt_no, prev_bal, excess = manager.add_payment(
-                                                        pupil_id, term_to_pay, year_to_pay, payment_for_this_term,
-                                                        f"{description} - {term_to_pay} {year_to_pay}"
-                                                    )
-
-                                                    if trans_id:
-                                                        payments_made.append({
-                                                            "Term": f"{term_to_pay} {year_to_pay}",
-                                                            "Amount": payment_for_this_term,
-                                                            "Receipt": receipt_no
-                                                        })
-                                                        remaining_amount -= payment_for_this_term
-                                                        st.success(
-                                                            f"✅ Paid UGX {payment_for_this_term:,.0f} for {term_to_pay} {year_to_pay}")
-
-                                            excess_amount = remaining_amount
-
-                                        elif allocation_method == "Pay Specific Term":
-                                            # Select which term to pay
-                                            term_options = [f"{row['Term']} (UGX {row['Balance (UGX)']:,.0f})" for
-                                                            _, row in outstanding_terms.iterrows()]
-                                            selected_term_str = st.selectbox("Select term to pay", term_options)
-
-                                            # Extract term and year from selection
-                                            selected_info = selected_term_str.split(" (")[0]
-                                            selected_term_parts = selected_info.split()
-                                            selected_term_name = f"{selected_term_parts[0]} {selected_term_parts[1]}" if len(
-                                                selected_term_parts) >= 2 else selected_term_parts[0]
-                                            selected_year = int(selected_term_parts[-1])
-
-                                            # Get the actual balance for that term
-                                            selected_row = \
-                                            outstanding_terms[outstanding_terms["Term"] == selected_info].iloc[0]
-                                            term_balance = selected_row["Balance (UGX)"]
-
-                                            payment_for_term = min(amount_paid, term_balance)
-
-                                            if payment_for_term > 0:
-                                                trans_id, new_balance, receipt_no, prev_bal, excess = manager.add_payment(
-                                                    pupil_id, selected_term_name, selected_year, payment_for_term,
-                                                    f"{description} - {selected_info}"
+                                    st.metric("💳 Credit", f"UGX {abs(overall_balance):,.0f}", delta="Credit")
+                            st.markdown("---")
+                            st.markdown("### 📊 Term Breakdown")
+                            df_terms = pd.DataFrame(term_data)
+                            df_display = df_terms.copy()
+                            df_display["Fees"] = df_display["Fees"].apply(lambda x: f"UGX {x:,.0f}")
+                            df_display["Paid"] = df_display["Paid"].apply(lambda x: f"UGX {x:,.0f}")
+                            df_display["Balance"] = df_display["Balance"].apply(lambda x: f"UGX {x:,.0f}")
+                            st.dataframe(df_display[["Term", "Fees", "Paid", "Balance", "Status"]], use_container_width=True, height=300)
+                            st.markdown("---")
+                            st.markdown("## 💰 Make Payment")
+                            if overall_balance <= 0:
+                                st.success(f"🎉 {pupil_name} has no outstanding balance!")
+                            else:
+                                st.warning(f"⚠️ Total amount due across all terms: UGX {overall_balance:,.0f}")
+                                outstanding = [t for t in term_data if t["Balance"] > 0]
+                                if outstanding:
+                                    with st.expander("📋 View outstanding terms"):
+                                        for term in outstanding:
+                                            st.markdown(f"- **{term['Term']}**: UGX {term['Balance']:,.0f}")
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    amount = st.number_input("Amount to Pay (UGX)", min_value=1000, value=min(overall_balance, 100000), step=50000, key="pay_amount")
+                                with col2:
+                                    desc = st.text_input("Description", "Fees Payment", key="pay_desc")
+                                if st.button("💸 Process Payment", use_container_width=True, type="primary"):
+                                    if amount < 1000:
+                                        st.error("Amount must be at least UGX 1,000")
+                                    else:
+                                        remaining = amount
+                                        payments_log = []
+                                        term_order = {"Term 1": 1, "Term 2": 2, "Term 3": 3}
+                                        outstanding_sorted = sorted(outstanding, key=lambda x: (int(x["Term"].split()[-1]), term_order.get(x["Term"].split()[0], 0)))
+                                        for term_info in outstanding_sorted:
+                                            if remaining <= 0:
+                                                break
+                                            term_parts = term_info["Term"].split()
+                                            term_name = f"{term_parts[0]} {term_parts[1]}"
+                                            term_year = int(term_parts[2])
+                                            balance_due = term_info["Balance"]
+                                            pay_amount = min(remaining, balance_due)
+                                            if pay_amount > 0:
+                                                trans_id, new_bal, receipt, prev_bal, excess = manager.add_payment(
+                                                    pupil_id, term_name, term_year, pay_amount, f"{desc} - {term_info['Term']}"
                                                 )
-
                                                 if trans_id:
-                                                    payments_made.append({
-                                                        "Term": selected_info,
-                                                        "Amount": payment_for_term,
-                                                        "Receipt": receipt_no
+                                                    payments_log.append({
+                                                        "Term": term_info["Term"],
+                                                        "Amount Paid": pay_amount,
+                                                        "Receipt": receipt
                                                     })
-                                                    remaining_amount = amount_paid - payment_for_term
-                                                    excess_amount = remaining_amount
-                                                    st.success(
-                                                        f"✅ Paid UGX {payment_for_term:,.0f} for {selected_info}")
-
-                                        else:  # Pay All Outstanding
-                                            # Pay as much as possible across all outstanding terms
-                                            for _, row in outstanding_terms.iterrows():
-                                                if remaining_amount <= 0:
-                                                    break
-
-                                                term_balance = row["Balance (UGX)"]
-                                                term_to_pay = row["Term Name"]
-                                                year_to_pay = row["Year"]
-
-                                                payment_for_this_term = min(remaining_amount, term_balance)
-
-                                                if payment_for_this_term > 0:
-                                                    trans_id, new_balance, receipt_no, prev_bal, excess = manager.add_payment(
-                                                        pupil_id, term_to_pay, year_to_pay, payment_for_this_term,
-                                                        f"{description} - {term_to_pay} {year_to_pay}"
-                                                    )
-
-                                                    if trans_id:
-                                                        payments_made.append({
-                                                            "Term": f"{term_to_pay} {year_to_pay}",
-                                                            "Amount": payment_for_this_term,
-                                                            "Receipt": receipt_no
-                                                        })
-                                                        remaining_amount -= payment_for_this_term
-                                                        st.success(
-                                                            f"✅ Paid UGX {payment_for_this_term:,.0f} for {term_to_pay} {year_to_pay}")
-
-                                            excess_amount = remaining_amount
-
-                                        # Summary of payment
-                                        if payments_made:
+                                                    remaining -= pay_amount
+                                                    st.success(f"✅ Paid UGX {pay_amount:,.0f} for {term_info['Term']}")
+                                        if payments_log:
                                             st.markdown("---")
                                             st.markdown("### 📋 Payment Summary")
-
-                                            df_summary = pd.DataFrame(payments_made)
-                                            st.dataframe(df_summary, use_container_width=True)
-
-                                            if excess_amount > 0:
-                                                st.info(
-                                                    f"💰 **Excess Payment:** UGX {excess_amount:,.0f} will be credited to the pupil's account for future terms.")
-
+                                            st.dataframe(pd.DataFrame(payments_log), use_container_width=True)
+                                            if remaining > 0:
+                                                st.info(f"💰 Excess payment: UGX {remaining:,.0f} will be credited")
                                             st.balloons()
-                                            st.success("✅ Payment processed successfully!")
-
-                                            # Clear cache and refresh
                                             cache.clear_all()
                                             time.sleep(2)
                                             st.rerun()
-                                        else:
-                                            st.error("Failed to process payment. Please try again.")
-
-                        except Exception as e:
-                            st.error(f"Error loading pupil data: {str(e)}")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+                        st.info("Make sure the pupil is enrolled in at least one term using the Term Enrollment section.")
+                elif selected_pupil and selected_pupil.get("is_sponsored", False):
+                    st.warning("⚠️ This is a sponsored child. No payment required.")
 
     # ------------------- CLASS REPORTS -------------------
     elif menu == "Class Reports":
         st.markdown("<h1 style='color: #1E3A5F; font-size: 1.5rem;'>Class Fee Reports</h1>", unsafe_allow_html=True)
-
         if st.session_state.show_archived:
             st.info(f"Showing **{current_term}, {current_year}** (INCLUDING ARCHIVED)")
         else:
             st.info(f"Showing **{current_term}, {current_year}**")
-
         col1, col2 = st.columns(2)
         with col1:
             selected_class = st.selectbox("Select Class", manager.classes, key="summary_class")
         with col2:
-            report_type = st.radio("View", ["All Pupils", "Cleared Only", "With Balance", "Archived Only"],
-                                   horizontal=True)
-
+            report_type = st.radio("View", ["All Pupils", "Cleared Only", "With Balance", "Archived Only"], horizontal=True)
         if st.button("Generate Report", use_container_width=True):
-            df_full, df_cleared, df_not_cleared, df_archived = manager.get_class_summary(
-                selected_class, current_term, current_year, include_archived=st.session_state.show_archived)
-
+            df_full, df_cleared, df_not_cleared, df_archived = manager.get_class_summary(selected_class, current_term, current_year, include_archived=st.session_state.show_archived)
             if report_type == "All Pupils":
                 df_to_show = df_full
             elif report_type == "Cleared Only":
@@ -2155,163 +1490,83 @@ def main_app():
                 df_to_show = df_not_cleared
             else:
                 df_to_show = df_archived
-
             if not df_to_show.empty:
                 st.dataframe(df_to_show, use_container_width=True)
-
                 st.markdown("---")
                 st.markdown("### 📊 Class Summary Statistics")
-
                 if report_type == "Archived Only":
                     financial_df = df_archived
                 else:
-                    financial_df = df_full[
-                        df_full["status"] != "Archived (Left School)"] if not df_full.empty else pd.DataFrame()
-
+                    financial_df = df_full[df_full["status"] != "Archived (Left School)"] if not df_full.empty else pd.DataFrame()
                 if not financial_df.empty:
                     total_pupils = len(financial_df)
                     total_expected = financial_df["term_fees"].sum() if "term_fees" in financial_df.columns else 0
                     total_paid = financial_df["total_paid"].sum() if "total_paid" in financial_df.columns else 0
                     total_balance = financial_df["balance"].sum() if "balance" in financial_df.columns else 0
-
-                    cleared_count = len(
-                        financial_df[financial_df["status"] == "Cleared"]) if "status" in financial_df.columns else 0
-                    not_cleared_count = len(financial_df[financial_df[
-                                                             "status"] == "Not Cleared"]) if "status" in financial_df.columns else 0
-
+                    cleared_count = len(financial_df[financial_df["status"] == "Cleared"]) if "status" in financial_df.columns else 0
+                    not_cleared_count = len(financial_df[financial_df["status"] == "Not Cleared"]) if "status" in financial_df.columns else 0
                     collection_rate = (total_paid / total_expected * 100) if total_expected > 0 else 0
-
                     col_a, col_b, col_c, col_d, col_e, col_f = st.columns(6)
-
                     with col_a:
-                        st.markdown(f"""
-                        <div style="background-color: #f8f9fa; border-radius: 8px; padding: 4px; text-align: center;">
-                            <p style="font-size: 0.55rem; color: #6c757d; margin: 0;">📚 Pupils</p>
-                            <p style="font-size: 0.9rem; font-weight: 600; color: #1E3A5F; margin: 0;">{total_pupils}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-
+                        st.markdown(f"<div style='background-color: #f8f9fa; border-radius: 8px; padding: 4px; text-align: center;'><p style='font-size: 0.55rem; color: #6c757d; margin: 0;'>📚 Pupils</p><p style='font-size: 0.9rem; font-weight: 600; color: #1E3A5F; margin: 0;'>{total_pupils}</p></div>", unsafe_allow_html=True)
                     with col_b:
-                        st.markdown(f"""
-                        <div style="background-color: #f8f9fa; border-radius: 8px; padding: 4px; text-align: center;">
-                            <p style="font-size: 0.55rem; color: #6c757d; margin: 0;">💰 Expected</p>
-                            <p style="font-size: 0.65rem; font-weight: 600; color: #1E3A5F; margin: 0;">UGX {total_expected:,.0f}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-
+                        st.markdown(f"<div style='background-color: #f8f9fa; border-radius: 8px; padding: 4px; text-align: center;'><p style='font-size: 0.55rem; color: #6c757d; margin: 0;'>💰 Expected</p><p style='font-size: 0.65rem; font-weight: 600; color: #1E3A5F; margin: 0;'>UGX {total_expected:,.0f}</p></div>", unsafe_allow_html=True)
                     with col_c:
-                        st.markdown(f"""
-                        <div style="background-color: #f8f9fa; border-radius: 8px; padding: 4px; text-align: center;">
-                            <p style="font-size: 0.55rem; color: #6c757d; margin: 0;">✅ Collected</p>
-                            <p style="font-size: 0.65rem; font-weight: 600; color: #28A745; margin: 0;">UGX {total_paid:,.0f}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-
+                        st.markdown(f"<div style='background-color: #f8f9fa; border-radius: 8px; padding: 4px; text-align: center;'><p style='font-size: 0.55rem; color: #6c757d; margin: 0;'>✅ Collected</p><p style='font-size: 0.65rem; font-weight: 600; color: #28A745; margin: 0;'>UGX {total_paid:,.0f}</p></div>", unsafe_allow_html=True)
                     with col_d:
-                        st.markdown(f"""
-                        <div style="background-color: #f8f9fa; border-radius: 8px; padding: 4px; text-align: center;">
-                            <p style="font-size: 0.55rem; color: #6c757d; margin: 0;">⚠️ Balance</p>
-                            <p style="font-size: 0.65rem; font-weight: 600; color: #DC3545; margin: 0;">UGX {total_balance:,.0f}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-
+                        st.markdown(f"<div style='background-color: #f8f9fa; border-radius: 8px; padding: 4px; text-align: center;'><p style='font-size: 0.55rem; color: #6c757d; margin: 0;'>⚠️ Balance</p><p style='font-size: 0.65rem; font-weight: 600; color: #DC3545; margin: 0;'>UGX {total_balance:,.0f}</p></div>", unsafe_allow_html=True)
                     with col_e:
-                        st.markdown(f"""
-                        <div style="background-color: #f8f9fa; border-radius: 8px; padding: 4px; text-align: center;">
-                            <p style="font-size: 0.55rem; color: #6c757d; margin: 0;">🎯 Cleared</p>
-                            <p style="font-size: 0.9rem; font-weight: 600; color: #28A745; margin: 0;">{cleared_count}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-
+                        st.markdown(f"<div style='background-color: #f8f9fa; border-radius: 8px; padding: 4px; text-align: center;'><p style='font-size: 0.55rem; color: #6c757d; margin: 0;'>🎯 Cleared</p><p style='font-size: 0.9rem; font-weight: 600; color: #28A745; margin: 0;'>{cleared_count}</p></div>", unsafe_allow_html=True)
                     with col_f:
-                        st.markdown(f"""
-                        <div style="background-color: #f8f9fa; border-radius: 8px; padding: 4px; text-align: center;">
-                            <p style="font-size: 0.55rem; color: #6c757d; margin: 0;">❌ Not Cleared</p>
-                            <p style="font-size: 0.9rem; font-weight: 600; color: #DC3545; margin: 0;">{not_cleared_count}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-
+                        st.markdown(f"<div style='background-color: #f8f9fa; border-radius: 8px; padding: 4px; text-align: center;'><p style='font-size: 0.55rem; color: #6c757d; margin: 0;'>❌ Not Cleared</p><p style='font-size: 0.9rem; font-weight: 600; color: #DC3545; margin: 0;'>{not_cleared_count}</p></div>", unsafe_allow_html=True)
                     if collection_rate > 0:
                         st.progress(collection_rate / 100)
                         st.caption(f"📈 Progress: {collection_rate:.1f}%")
-
                     st.markdown("---")
                     st.markdown("#### 👥 Breakdown by Pupil Type")
-
                     if "pupil_type" in financial_df.columns:
-                        category_stats = financial_df.groupby("pupil_type").agg({
-                            "term_fees": "sum",
-                            "total_paid": "sum",
-                            "balance": "sum",
-                            "name": "count"
-                        }).rename(columns={"name": "count"})
-
+                        category_stats = financial_df.groupby("pupil_type").agg({"term_fees": "sum", "total_paid": "sum", "balance": "sum", "name": "count"}).rename(columns={"name": "count"})
                         if not category_stats.empty:
                             cat_col1, cat_col2, cat_col3 = st.columns(3)
-
                             for idx, (cat_type, row) in enumerate(category_stats.iterrows()):
                                 cat_col = [cat_col1, cat_col2, cat_col3][idx % 3]
                                 with cat_col:
-                                    cat_rate = (row['total_paid'] / row['term_fees'] * 100) if row[
-                                                                                                   'term_fees'] > 0 else 0
-
-                                    st.markdown(f"""
-                                    <div style="background: linear-gradient(135deg, #F8F9FA 0%, #FFFFFF 100%); border-radius: 12px; padding: 12px; margin: 5px 0; border-left: 4px solid #1E3A5F;">
-                                        <h4 style="color: #1E3A5F; margin: 0 0 8px 0; font-size: 1rem;">{cat_type}</h4>
-                                        <p style="margin: 3px 0; font-size: 0.75rem;">👥 Count: {int(row['count'])}</p>
-                                        <p style="margin: 3px 0; font-size: 0.75rem;">💰 Expected: UGX {row['term_fees']:,.0f}</p>
-                                        <p style="margin: 3px 0; font-size: 0.75rem;">✅ Paid: UGX {row['total_paid']:,.0f}</p>
-                                        <p style="margin: 3px 0; font-size: 0.75rem;">⚠️ Balance: UGX {row['balance']:,.0f}</p>
-                                        <p style="margin: 3px 0; font-size: 0.75rem; font-weight: bold;">📊 Rate: {cat_rate:.1f}%</p>
-                                    </div>
-                                    """, unsafe_allow_html=True)
+                                    cat_rate = (row['total_paid'] / row['term_fees'] * 100) if row['term_fees'] > 0 else 0
+                                    st.markdown(f"<div style='background: linear-gradient(135deg, #F8F9FA 0%, #FFFFFF 100%); border-radius: 12px; padding: 12px; margin: 5px 0; border-left: 4px solid #1E3A5F;'><h4 style='color: #1E3A5F; margin: 0 0 8px 0; font-size: 1rem;'>{cat_type}</h4><p style='margin: 3px 0; font-size: 0.75rem;'>👥 Count: {int(row['count'])}</p><p style='margin: 3px 0; font-size: 0.75rem;'>💰 Expected: UGX {row['term_fees']:,.0f}</p><p style='margin: 3px 0; font-size: 0.75rem;'>✅ Paid: UGX {row['total_paid']:,.0f}</p><p style='margin: 3px 0; font-size: 0.75rem;'>⚠️ Balance: UGX {row['balance']:,.0f}</p><p style='margin: 3px 0; font-size: 0.75rem; font-weight: bold;'>📊 Rate: {cat_rate:.1f}%</p></div>", unsafe_allow_html=True)
                 else:
                     st.info("No financial data available for this report")
-
                 st.markdown("---")
                 st.subheader("Export Options")
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     csv = df_to_show.to_csv(index=False).encode()
-                    st.download_button("📊 CSV", csv, f"{selected_class}_{current_term}_{current_year}_report.csv",
-                                       "text/csv")
+                    st.download_button("📊 CSV", csv, f"{selected_class}_{current_term}_{current_year}_report.csv", "text/csv")
                 with col2:
-                    excel_data = {"Summary": df_full, "Cleared": df_cleared, "With Balance": df_not_cleared,
-                                  "Archived": df_archived}
-                    st.download_button("📘 Excel", export_to_excel(excel_data, "report.xlsx"),
-                                       f"{selected_class}_{current_term}_{current_year}_report.xlsx")
+                    excel_data = {"Summary": df_full, "Cleared": df_cleared, "With Balance": df_not_cleared, "Archived": df_archived}
+                    st.download_button("📘 Excel", export_to_excel(excel_data, "report.xlsx"), f"{selected_class}_{current_term}_{current_year}_report.xlsx")
                 with col3:
                     pdf_buffer = export_summary_to_pdf(df_to_show, f"{selected_class} Report", "report.pdf")
-                    st.download_button("📄 PDF", pdf_buffer,
-                                       f"{selected_class}_{current_term}_{current_year}_report.pdf", "application/pdf")
+                    st.download_button("📄 PDF", pdf_buffer, f"{selected_class}_{current_term}_{current_year}_report.pdf", "application/pdf")
 
     # ------------------- SCHOOL REPORTS -------------------
     elif menu == "School Reports":
         st.markdown("<h1 style='color: #1E3A5F; font-size: 1.5rem;'>School-Wide Reports</h1>", unsafe_allow_html=True)
-
         if st.session_state.show_archived:
             st.info(f"Showing **{current_term}, {current_year}** (INCLUDING ARCHIVED)")
         else:
             st.info(f"Showing **{current_term}, {current_year}**")
-
         col_filter1, col_filter2, col_filter3 = st.columns(3)
         with col_filter1:
             filter_class = st.selectbox("Filter by Class", ["All Classes"] + manager.classes, key="filter_class_report")
         with col_filter2:
-            filter_type = st.selectbox("Filter by Type", ["All", "Staff Child", "Shepherd Child", "Community Child"],
-                                       key="filter_type_report")
+            filter_type = st.selectbox("Filter by Type", ["All", "Staff Child", "Shepherd Child", "Community Child"], key="filter_type_report")
         with col_filter3:
-            filter_status = st.selectbox("Filter by Status", ["All", "Cleared", "Not Cleared", "Archived"],
-                                         key="filter_status_report")
-
+            filter_status = st.selectbox("Filter by Status", ["All", "Cleared", "Not Cleared", "Archived"], key="filter_status_report")
         if st.button("Generate School Summary", key="school_summary"):
-            df_all, df_staff, df_shepherd, df_community = manager.get_school_wide_summary(
-                current_term, current_year, include_archived=st.session_state.show_archived)
-
+            df_all, df_staff, df_shepherd, df_community = manager.get_school_wide_summary(current_term, current_year, include_archived=st.session_state.show_archived)
             if filter_class != "All Classes" and not df_all.empty:
                 if "Class" in df_all.columns:
                     df_all = df_all[df_all["Class"] == filter_class]
-
             if filter_type == "Staff Child":
                 df_to_show = df_staff
             elif filter_type == "Shepherd Child":
@@ -2320,14 +1575,12 @@ def main_app():
                 df_to_show = df_community
             else:
                 df_to_show = df_all
-
             if not df_to_show.empty and filter_status != "All":
                 status_col = None
                 for col in ["Status", "status", "STATUS"]:
                     if col in df_to_show.columns:
                         status_col = col
                         break
-
                 if status_col:
                     if filter_status == "Cleared":
                         df_to_show = df_to_show[df_to_show[status_col] == "Cleared"]
@@ -2335,38 +1588,22 @@ def main_app():
                         df_to_show = df_to_show[df_to_show[status_col] == "Not Cleared"]
                     elif filter_status == "Archived":
                         df_to_show = df_to_show[df_to_show[status_col] == "Archived (Left School)"]
-
             if not df_to_show.empty:
                 st.dataframe(df_to_show, use_container_width=True)
-
                 st.markdown("---")
                 st.markdown("### 📊 School-Wide Summary Statistics")
-
                 st.markdown("""
                 <style>
-                    div[data-testid="stMetric"] {
-                        background-color: #f8f9fa;
-                        border-radius: 10px;
-                        padding: 6px;
-                        text-align: center;
-                    }
-                    div[data-testid="stMetric"] label {
-                        font-size: 0.65rem !important;
-                        color: #6c757d !important;
-                    }
-                    div[data-testid="stMetric"] div {
-                        font-size: 0.85rem !important;
-                        font-weight: 600 !important;
-                    }
+                    div[data-testid="stMetric"] { background-color: #f8f9fa; border-radius: 10px; padding: 6px; text-align: center; }
+                    div[data-testid="stMetric"] label { font-size: 0.65rem !important; color: #6c757d !important; }
+                    div[data-testid="stMetric"] div { font-size: 0.85rem !important; font-weight: 600 !important; }
                 </style>
                 """, unsafe_allow_html=True)
-
                 financial_df = df_to_show.copy()
                 if "Status" in financial_df.columns:
                     financial_df = financial_df[financial_df["Status"] != "Archived (Left School)"]
                 elif "status" in financial_df.columns:
                     financial_df = financial_df[financial_df["status"] != "Archived (Left School)"]
-
                 if not financial_df.empty:
                     term_fees_col = "Term Fees (UGX)" if "Term Fees (UGX)" in financial_df.columns else "term_fees"
                     total_paid_col = "Total Paid (UGX)" if "Total Paid (UGX)" in financial_df.columns else "total_paid"
@@ -2374,17 +1611,13 @@ def main_app():
                     class_col = "Class" if "Class" in financial_df.columns else "class"
                     pupil_type_col = "Pupil Type" if "Pupil Type" in financial_df.columns else "pupil_type"
                     status_col_final = "Status" if "Status" in financial_df.columns else "status"
-
                     total_pupils = len(financial_df)
                     total_expected = financial_df[term_fees_col].sum()
                     total_paid = financial_df[total_paid_col].sum()
                     total_balance = financial_df[balance_col].sum()
-
                     cleared_count = len(financial_df[financial_df[status_col_final] == "Cleared"])
                     not_cleared_count = len(financial_df[financial_df[status_col_final] == "Not Cleared"])
-
                     collection_rate = (total_paid / total_expected * 100) if total_expected > 0 else 0
-
                     col_a, col_b, col_c, col_d, col_e, col_f = st.columns(6)
                     with col_a:
                         st.metric("📚 Pupils", total_pupils)
@@ -2398,114 +1631,46 @@ def main_app():
                         st.metric("🎯 Cleared", cleared_count)
                     with col_f:
                         st.metric("❌ Not Cleared", not_cleared_count)
-
                     if collection_rate > 0:
                         st.progress(collection_rate / 100)
                         st.caption(f"📈 Collection Rate: {collection_rate:.1f}%")
-
                     st.markdown("---")
                     st.markdown("### 🏫 Performance by Class")
-
                     class_summary_list = []
                     for class_name in financial_df[class_col].unique():
                         class_data = financial_df[financial_df[class_col] == class_name]
-                        class_summary_list.append({
-                            "Class": class_name,
-                            "Pupils": len(class_data),
-                            "Expected": class_data[term_fees_col].sum(),
-                            "Collected": class_data[total_paid_col].sum(),
-                            "Balance": class_data[balance_col].sum()
-                        })
-
+                        class_summary_list.append({"Class": class_name, "Pupils": len(class_data), "Expected": class_data[term_fees_col].sum(), "Collected": class_data[total_paid_col].sum(), "Balance": class_data[balance_col].sum()})
                     if class_summary_list:
                         class_summary_df = pd.DataFrame(class_summary_list)
-                        class_summary_df["Rate"] = (
-                                class_summary_df["Collected"] / class_summary_df["Expected"] * 100).fillna(0).round(
-                            1)
+                        class_summary_df["Rate"] = (class_summary_df["Collected"] / class_summary_df["Expected"] * 100).fillna(0).round(1)
                         class_summary_df = class_summary_df.sort_values("Class")
-
-                        st.dataframe(
-                            class_summary_df.style.format({
-                                "Expected": "UGX {:,.0f}",
-                                "Collected": "UGX {:,.0f}",
-                                "Balance": "UGX {:,.0f}",
-                                "Rate": "{:.1f}%"
-                            }),
-                            use_container_width=True
-                        )
-
+                        st.dataframe(class_summary_df.style.format({"Expected": "UGX {:,.0f}", "Collected": "UGX {:,.0f}", "Balance": "UGX {:,.0f}", "Rate": "{:.1f}%"}), use_container_width=True)
                         if len(class_summary_df) > 1:
-                            fig = px.bar(
-                                class_summary_df,
-                                x="Class",
-                                y="Rate",
-                                title="Collection Rate by Class",
-                                color="Rate",
-                                color_continuous_scale="RdYlGn",
-                                text="Rate"
-                            )
+                            fig = px.bar(class_summary_df, x="Class", y="Rate", title="Collection Rate by Class", color="Rate", color_continuous_scale="RdYlGn", text="Rate")
                             fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
                             fig.update_layout(plot_bgcolor='white', paper_bgcolor='white', height=400)
                             st.plotly_chart(fig, use_container_width=True)
-
                     st.markdown("---")
                     st.markdown("### 👥 Performance by Pupil Category")
-
                     category_summary_list = []
                     for cat_type in financial_df[pupil_type_col].unique():
                         cat_data = financial_df[financial_df[pupil_type_col] == cat_type]
-                        category_summary_list.append({
-                            "Category": cat_type,
-                            "Pupils": len(cat_data),
-                            "Expected": cat_data[term_fees_col].sum(),
-                            "Collected": cat_data[total_paid_col].sum(),
-                            "Balance": cat_data[balance_col].sum()
-                        })
-
+                        category_summary_list.append({"Category": cat_type, "Pupils": len(cat_data), "Expected": cat_data[term_fees_col].sum(), "Collected": cat_data[total_paid_col].sum(), "Balance": cat_data[balance_col].sum()})
                     if category_summary_list:
                         category_summary_df = pd.DataFrame(category_summary_list)
-                        category_summary_df["Rate"] = (
-                                category_summary_df["Collected"] / category_summary_df["Expected"] * 100).fillna(
-                            0).round(1)
-
+                        category_summary_df["Rate"] = (category_summary_df["Collected"] / category_summary_df["Expected"] * 100).fillna(0).round(1)
                         cat_cols = st.columns(len(category_summary_df))
                         for idx, row in category_summary_df.iterrows():
                             with cat_cols[idx]:
-                                st.markdown(f"""
-                                <div style="background: #f8f9fa; border-radius: 10px; padding: 8px; text-align: center;">
-                                    <p style="font-weight: 700; margin: 0; font-size: 0.75rem;">{row['Category']}</p>
-                                    <p style="margin: 2px 0; font-size: 0.65rem;">👥 {int(row['Pupils'])}</p>
-                                    <p style="margin: 2px 0; font-size: 0.6rem;">💰 UGX {row['Expected']:,.0f}</p>
-                                    <p style="margin: 2px 0; font-size: 0.6rem;">✅ UGX {row['Collected']:,.0f}</p>
-                                    <p style="margin: 2px 0; font-size: 0.6rem;">⚠️ UGX {row['Balance']:,.0f}</p>
-                                    <p style="margin: 2px 0; font-size: 0.65rem; font-weight: 700;">📊 {row['Rate']:.1f}%</p>
-                                </div>
-                                """, unsafe_allow_html=True)
-
-                        fig2 = px.pie(
-                            category_summary_df,
-                            values="Pupils",
-                            names="Category",
-                            title="Pupil Distribution by Category",
-                            color_discrete_sequence=px.colors.qualitative.Set2
-                        )
+                                st.markdown(f"<div style='background: #f8f9fa; border-radius: 10px; padding: 8px; text-align: center;'><p style='font-weight: 700; margin: 0; font-size: 0.75rem;'>{row['Category']}</p><p style='margin: 2px 0; font-size: 0.65rem;'>👥 {int(row['Pupils'])}</p><p style='margin: 2px 0; font-size: 0.6rem;'>💰 UGX {row['Expected']:,.0f}</p><p style='margin: 2px 0; font-size: 0.6rem;'>✅ UGX {row['Collected']:,.0f}</p><p style='margin: 2px 0; font-size: 0.6rem;'>⚠️ UGX {row['Balance']:,.0f}</p><p style='margin: 2px 0; font-size: 0.65rem; font-weight: 700;'>📊 {row['Rate']:.1f}%</p></div>", unsafe_allow_html=True)
+                        fig2 = px.pie(category_summary_df, values="Pupils", names="Category", title="Pupil Distribution by Category", color_discrete_sequence=px.colors.qualitative.Set2)
                         fig2.update_layout(plot_bgcolor='white', paper_bgcolor='white', height=350)
                         st.plotly_chart(fig2, use_container_width=True)
-
                     st.markdown("---")
                     st.markdown("### 🏆 Top 5 Performing Classes")
                     if class_summary_list:
-                        top_classes = class_summary_df.nlargest(5, "Rate")[
-                            ["Class", "Pupils", "Expected", "Collected", "Rate"]]
-                        st.dataframe(
-                            top_classes.style.format({
-                                "Expected": "UGX {:,.0f}",
-                                "Collected": "UGX {:,.0f}",
-                                "Rate": "{:.1f}%"
-                            }),
-                            use_container_width=True
-                        )
-
+                        top_classes = class_summary_df.nlargest(5, "Rate")[["Class", "Pupils", "Expected", "Collected", "Rate"]]
+                        st.dataframe(top_classes.style.format({"Expected": "UGX {:,.0f}", "Collected": "UGX {:,.0f}", "Rate": "{:.1f}%"}), use_container_width=True)
                 st.markdown("---")
                 st.subheader("Export Options")
                 csv = df_to_show.to_csv(index=False).encode()
@@ -2516,50 +1681,34 @@ def main_app():
     # ------------------- MANAGE PUPILS -------------------
     elif menu == "Manage Pupils" and role == "bursar":
         st.markdown("<h1 style='color: #1E3A5F; font-size: 1.5rem;'>Manage Pupils</h1>", unsafe_allow_html=True)
-
         all_pupils = manager.get_all_pupils(include_archived=False)
-
         if not all_pupils:
             st.info("No active pupils found")
         else:
             col_filter1, col_filter2, col_filter3 = st.columns(3)
             with col_filter1:
-                filter_class = st.selectbox("Filter by Class", ["All Classes"] + manager.classes,
-                                            key="filter_manage_class")
+                filter_class = st.selectbox("Filter by Class", ["All Classes"] + manager.classes, key="filter_manage_class")
             with col_filter2:
-                filter_type = st.selectbox("Filter by Type",
-                                           ["All", "Staff Child", "Shepherd Child", "Community Child"],
-                                           key="filter_manage_type")
+                filter_type = st.selectbox("Filter by Type", ["All", "Staff Child", "Shepherd Child", "Community Child"], key="filter_manage_type")
             with col_filter3:
                 search_term = st.text_input("Search", placeholder="Type name...", key="search_pupil")
-
             pupil_dicts = [p for p in all_pupils]
-
             if filter_class != "All Classes":
                 pupil_dicts = [p for p in pupil_dicts if p.get("class") == filter_class]
             if filter_type != "All":
                 pupil_dicts = [p for p in pupil_dicts if p.get("pupil_type", "Community Child") == filter_type]
             if search_term:
                 pupil_dicts = [p for p in pupil_dicts if search_term.lower() in p.get("name", "").lower()]
-
             if not pupil_dicts:
                 st.warning("No pupils found")
             else:
                 st.markdown(f"### {len(pupil_dicts)} pupil(s)")
-
                 for pupil in pupil_dicts:
                     pupil_type = pupil.get("pupil_type", "Community Child")
-                    with st.expander(
-                            f"📌 {pupil['name']} - {pupil['class']} (Fees: UGX {pupil.get('term_fees', 0):,.0f})"):
+                    with st.expander(f"📌 {pupil['name']} - {pupil['class']} (Fees: UGX {pupil.get('term_fees', 0):,.0f})"):
                         col1, col2 = st.columns(2)
                         with col1:
-                            st.markdown(f"""
-                            **Info:**
-                            - **Name:** {pupil['name']}
-                            - **Class:** {pupil['class']}
-                            - **Type:** {pupil_type}
-                            - **Enrolled:** {pupil.get('enrollment_term', 'Term 1')} {pupil.get('enrollment_year', '2024')}
-                            """)
+                            st.markdown(f"**Info:**\n- **Name:** {pupil['name']}\n- **Class:** {pupil['class']}\n- **Type:** {pupil_type}\n- **Enrolled:** {pupil.get('enrollment_term', 'Term 1')} {pupil.get('enrollment_year', '2024')}")
                         with col2:
                             total_paid_all = 0
                             for term in ["Term 1", "Term 2", "Term 3"]:
@@ -2569,22 +1718,13 @@ def main_app():
                                 if term_paid > 0:
                                     st.write(f"- {term}: UGX {term_paid:,.0f}")
                             st.write(f"**Total Paid:** UGX {total_paid_all:,.0f}")
-
                         st.markdown("---")
                         with st.form(key=f"edit_form_{pupil['id']}"):
                             new_name = st.text_input("Name", pupil['name'], key=f"name_{pupil['id']}")
-                            new_class = st.selectbox("Class", manager.classes,
-                                                     index=manager.classes.index(pupil['class']) if pupil[
-                                                                                                        'class'] in manager.classes else 0,
-                                                     key=f"class_{pupil['id']}")
-                            new_type = st.selectbox("Type", manager.pupil_types, index=manager.pupil_types.index(
-                                pupil_type) if pupil_type in manager.pupil_types else 0, key=f"type_{pupil['id']}")
-
+                            new_class = st.selectbox("Class", manager.classes, index=manager.classes.index(pupil['class']) if pupil['class'] in manager.classes else 0, key=f"class_{pupil['id']}")
+                            new_type = st.selectbox("Type", manager.pupil_types, index=manager.pupil_types.index(pupil_type) if pupil_type in manager.pupil_types else 0, key=f"type_{pupil['id']}")
                             default_fees = 0 if new_type == "Shepherd Child" else pupil.get('term_fees', 0)
-                            new_fees = st.number_input("Term Fees", value=int(default_fees), step=50000,
-                                                       key=f"fees_{pupil['id']}",
-                                                       disabled=(new_type == "Shepherd Child"))
-
+                            new_fees = st.number_input("Term Fees", value=int(default_fees), step=50000, key=f"fees_{pupil['id']}", disabled=(new_type == "Shepherd Child"))
                             col_edit, col_archive = st.columns(2)
                             with col_edit:
                                 if st.form_submit_button("💾 Save Changes", use_container_width=True):
@@ -2592,8 +1732,7 @@ def main_app():
                                     st.success("Updated!")
                                     st.rerun()
                             with col_archive:
-                                leaving_reason = st.text_area("Archive Reason", placeholder="Reason for leaving",
-                                                              key=f"leaving_{pupil['id']}")
+                                leaving_reason = st.text_area("Archive Reason", placeholder="Reason for leaving", key=f"leaving_{pupil['id']}")
                                 if st.form_submit_button("📦 Archive Pupil", use_container_width=True):
                                     if leaving_reason:
                                         manager.archive_pupil(pupil['id'], leaving_reason)
@@ -2605,25 +1744,18 @@ def main_app():
     # ------------------- ARCHIVED PUPILS -------------------
     elif menu == "Archived Pupils" and role == "bursar":
         st.markdown("<h1 style='color: #1E3A5F; font-size: 1.5rem;'>Archived Pupils</h1>", unsafe_allow_html=True)
-
         archived_pupils = manager.get_archived_pupils()
-
         if not archived_pupils:
             st.info("No archived pupils found")
         else:
             for pupil in archived_pupils:
-                with st.expander(
-                        f"📌 {pupil['name']} - {pupil['class']} (Left: {pupil.get('leaving_date', 'Unknown')[:10]})"):
+                with st.expander(f"📌 {pupil['name']} - {pupil['class']} (Left: {pupil.get('leaving_date', 'Unknown')[:10]})"):
                     st.markdown(f"**Reason:** {pupil.get('leaving_reason', 'Not specified')}")
-
                     col1, col2 = st.columns(2)
                     with col1:
-                        return_term = st.selectbox("Return Term", ["Term 1", "Term 2", "Term 3"],
-                                                   key=f"return_term_{pupil['id']}")
+                        return_term = st.selectbox("Return Term", ["Term 1", "Term 2", "Term 3"], key=f"return_term_{pupil['id']}")
                     with col2:
-                        return_year = st.number_input("Return Year", value=current_year,
-                                                      key=f"return_year_{pupil['id']}")
-
+                        return_year = st.number_input("Return Year", value=current_year, key=f"return_year_{pupil['id']}")
                     if st.button(f"🔄 Restore Pupil", key=f"restore_{pupil['id']}"):
                         if manager.restore_pupil(pupil['id'], return_term, return_year):
                             st.success(f"✅ {pupil['name']} restored to {return_term} {return_year}!")
