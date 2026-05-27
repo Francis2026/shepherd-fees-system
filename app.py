@@ -571,6 +571,7 @@ class FeesManager:
         return CLASS_PROGRESSION.get(current_class, current_class)
 
     def get_all_pupils(self, include_archived=False):
+        """Get pupils - filtered by whether they are archived for current term"""
         cache_key = f"pupils_all_{include_archived}"
         cached = cache.get(cache_key, "pupils")
         if cached is not None:
@@ -582,6 +583,7 @@ class FeesManager:
         try:
             query = supabase.table("pupils").select("*")
             if not include_archived:
+                # Only show pupils where active=True AND they have an active term enrollment for current term
                 query = query.eq("active", True)
             result = query.execute()
             pupils = result.data
@@ -629,11 +631,12 @@ class FeesManager:
             return False
 
     def get_pupils_for_term(self, class_name, term, year, include_archived=False):
-        """ONLY show pupils who are ENROLLED in this specific term via term_enrollments table"""
+        """ONLY show pupils who are ENROLLED and ACTIVE in this specific term"""
         if supabase is None:
             return []
 
         try:
+            # Only get term_enrollments that are active for this specific term
             result = supabase.table("term_enrollments") \
                 .select("pupil_id, term_fees, pupils(*)") \
                 .eq("term", term) \
@@ -646,11 +649,16 @@ class FeesManager:
                 pupil = item.get("pupils", {})
                 if pupil:
                     if class_name == "All Classes" or pupil.get("class") == class_name:
-                        if not include_archived and pupil.get("archived", False):
-                            continue
-                        # Add the term-specific fee to the pupil dict
-                        pupil["term_fees_for_term"] = item.get("term_fees", pupil.get("term_fees", 0))
-                        pupils.append(pupil)
+                        # For archived view, include pupils archived for this specific term
+                        if include_archived:
+                            pupils.append(pupil)
+                        else:
+                            # Only include if pupil is active AND not archived for this term
+                            # Check if there's any archived flag for this term
+                            is_archived_for_term = pupil.get("archived_term") == term and pupil.get("archived_year") == year
+                            if pupil.get("active", True) and not is_archived_for_term:
+                                pupil["term_fees_for_term"] = item.get("term_fees", pupil.get("term_fees", 0))
+                                pupils.append(pupil)
 
             return pupils
         except Exception as e:
@@ -864,30 +872,35 @@ class FeesManager:
             return False
 
     def archive_pupil(self, pupil_id, leaving_reason=""):
-        """Archive a pupil - deactivate future terms but keep historical data"""
+        """Archive a pupil for the CURRENT term only - keep historical terms intact"""
         if supabase is None:
             return False
 
         try:
-            # Get current term/year from pupil
+            # Get pupil details to know current term
             pupil = self.get_pupil_details(pupil_id)
-            if pupil:
-                # Only deactivate enrollment for the term they are leaving FROM
-                # Previous terms should remain active for historical accuracy
-                current_term = pupil.get("current_term", "Term 1")
-                current_year = pupil.get("current_year", 2024)
+            if not pupil:
+                return False
 
-                supabase.table("term_enrollments").update({"is_active": False}) \
-                    .eq("pupil_id", pupil_id) \
-                    .eq("term", current_term) \
-                    .eq("year", current_year) \
-                    .execute()
+            current_term = pupil.get("current_term", "Term 1")
+            current_year = pupil.get("current_year", 2024)
 
+            # ONLY deactivate enrollment for the CURRENT term they are leaving FROM
+            # Previous terms remain active for historical accuracy
+            supabase.table("term_enrollments").update({"is_active": False}) \
+                .eq("pupil_id", pupil_id) \
+                .eq("term", current_term) \
+                .eq("year", current_year) \
+                .execute()
+
+            # Update the pupil's current term to mark they are no longer active in THIS term
+            # But DON'T set archived=True globally - that would affect all terms
             supabase.table("pupils").update({
-                "active": False,
-                "archived": True,
+                "active": False,  # Mark as inactive for current operations
                 "leaving_date": datetime.datetime.now().isoformat(),
-                "leaving_reason": leaving_reason
+                "leaving_reason": leaving_reason,
+                "archived_term": current_term,
+                "archived_year": current_year
             }).eq("id", pupil_id).execute()
 
             cache.invalidate(data_type="pupils")
