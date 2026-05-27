@@ -737,10 +737,13 @@ class FeesManager:
                 .eq("year", year) \
                 .execute()
 
-            if result.data:
-                return result.data[0].get("term_fees", 0)
+            if result.data and len(result.data) > 0:
+                fee = result.data[0].get("term_fees")
+                if fee is not None:
+                    return float(fee)
             return None
-        except:
+        except Exception as e:
+            print(f"Error getting term fees: {e}")
             return None
 
     def enroll_pupil(self, name, class_name, term_fees, pupil_type, current_term, current_year):
@@ -1943,7 +1946,9 @@ def main_app():
                                 is_active = enrollment.get("is_active", True)
 
                                 # Get term fees
-                                term_fee = current_term_fees
+                                term_fee = manager.get_term_fees(pupil_id, term, year)
+                                if term_fee is None:
+                                    term_fee = current_term_fees
 
                                 # Get payments for this term
                                 payments = manager.get_ledger(pupil_id, term, year)
