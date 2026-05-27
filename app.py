@@ -2488,9 +2488,11 @@ def main_app():
             else:
                 st.warning("No data available for the selected filters")
 
-    # ------------------- MANAGE PUPILS -------------------
+    # ------------------- MANAGE PUPILS (FIXED - SHOWS CURRENT TERM INFO) -------------------
     elif menu == "Manage Pupils" and role == "bursar":
         st.markdown("<h1 style='color: #1E3A5F; font-size: 1.5rem;'>Manage Pupils</h1>", unsafe_allow_html=True)
+        st.info(
+            f"📌 **Editing pupil information will update the CURRENT term ({current_term} {current_year}) fee. Past terms keep their original fees.**")
 
         all_pupils = manager.get_all_pupils(include_archived=False)
 
@@ -2523,49 +2525,134 @@ def main_app():
                 st.markdown(f"### {len(pupil_dicts)} pupil(s)")
 
                 for pupil in pupil_dicts:
+                    pupil_id = pupil.get('id')
                     pupil_type = pupil.get("pupil_type", "Community Child")
+
+                    # Get the CURRENT term enrollment info for this pupil
+                    current_term_enrollment = None
+                    try:
+                        result = supabase.table("term_enrollments") \
+                            .select("term, year, term_fees") \
+                            .eq("pupil_id", pupil_id) \
+                            .eq("term", current_term) \
+                            .eq("year", current_year) \
+                            .execute()
+                        if result.data:
+                            current_term_enrollment = result.data[0]
+                    except:
+                        pass
+
+                    # Get the term-specific fee for current term
+                    current_term_fee = manager.get_term_fees(pupil_id, current_term, current_year)
+                    if current_term_fee is None:
+                        current_term_fee = pupil.get("term_fees", 0)
+
+                    # Get enrollment info display
+                    enrollment_display = f"{pupil.get('enrollment_term', 'Term 1')} {pupil.get('enrollment_year', current_year)}"
+                    if current_term_enrollment:
+                        enrollment_display = f"Enrolled in {current_term} {current_year} | Started: {enrollment_display}"
+
                     with st.expander(
-                            f"📌 {pupil['name']} - {pupil['class']} (Fees: UGX {pupil.get('term_fees', 0):,.0f})"):
+                            f"📌 {pupil['name']} - {pupil['class']} | Current Term Fee: UGX {current_term_fee:,.0f}"):
+
+                        # Show current term information prominently
+                        st.info(f"**Currently in:** {current_term} {current_year}")
+                        st.caption(
+                            f"First enrolled: {pupil.get('enrollment_term', 'Term 1')} {pupil.get('enrollment_year', current_year)}")
+
                         col1, col2 = st.columns(2)
                         with col1:
                             st.markdown(f"""
-                            **Info:**
+                            **Pupil Information:**
                             - **Name:** {pupil['name']}
                             - **Class:** {pupil['class']}
                             - **Type:** {pupil_type}
-                            - **Enrolled:** {pupil.get('enrollment_term', 'Term 1')} {pupil.get('enrollment_year', '2024')}
+                            - **Current Term Fee:** UGX {current_term_fee:,.0f}
                             """)
                         with col2:
+                            # Show payment summary across all terms
                             total_paid_all = 0
-                            for term in ["Term 1", "Term 2", "Term 3"]:
-                                payments = manager.get_ledger(pupil['id'], term, 2024)
-                                term_paid = sum([p.get("amount", 0) for p in payments if p.get("amount", 0) > 0])
-                                total_paid_all += term_paid
-                                if term_paid > 0:
-                                    st.write(f"- {term}: UGX {term_paid:,.0f}")
-                            st.write(f"**Total Paid:** UGX {total_paid_all:,.0f}")
+                            st.markdown("**Payment History:**")
+                            try:
+                                # Get all term enrollments for this pupil
+                                terms_result = supabase.table("term_enrollments") \
+                                    .select("term, year") \
+                                    .eq("pupil_id", pupil_id) \
+                                    .execute()
+
+                                for term_enroll in terms_result.data:
+                                    term = term_enroll["term"]
+                                    year = term_enroll["year"]
+                                    payments = manager.get_ledger(pupil_id, term, year)
+                                    term_paid = sum([p.get("amount", 0) for p in payments if p.get("amount", 0) > 0])
+                                    total_paid_all += term_paid
+                                    if term_paid > 0:
+                                        st.write(f"- {term} {year}: UGX {term_paid:,.0f}")
+                                    else:
+                                        st.write(f"- {term} {year}: No payments")
+                            except:
+                                st.write("No payment history available")
+
+                            st.write(f"**Total Paid All Time:** UGX {total_paid_all:,.0f}")
 
                         st.markdown("---")
+                        st.warning(
+                            "⚠️ **Note:** Changing fees below will ONLY affect the CURRENT term and future terms. Past terms will keep their original fees.")
+
                         with st.form(key=f"edit_form_{pupil['id']}"):
                             new_name = st.text_input("Name", pupil['name'], key=f"name_{pupil['id']}")
                             new_class = st.selectbox("Class", manager.classes,
                                                      index=manager.classes.index(pupil['class']) if pupil[
                                                                                                         'class'] in manager.classes else 0,
                                                      key=f"class_{pupil['id']}")
-                            new_type = st.selectbox("Type", manager.pupil_types, index=manager.pupil_types.index(
-                                pupil_type) if pupil_type in manager.pupil_types else 0, key=f"type_{pupil['id']}")
+                            new_type = st.selectbox("Type", manager.pupil_types,
+                                                    index=manager.pupil_types.index(
+                                                        pupil_type) if pupil_type in manager.pupil_types else 0,
+                                                    key=f"type_{pupil['id']}")
 
-                            default_fees = 0 if new_type == "Shepherd Child" else pupil.get('term_fees', 0)
-                            new_fees = st.number_input("Term Fees", value=int(default_fees), step=50000,
-                                                       key=f"fees_{pupil['id']}",
-                                                       disabled=(new_type == "Shepherd Child"))
+                            # Show current fee from term_enrollments for this term
+                            st.caption(f"Current fee for {current_term} {current_year}: UGX {current_term_fee:,.0f}")
+                            default_fees = 0 if new_type == "Shepherd Child" else current_term_fee
+                            new_fees = st.number_input(
+                                f"New Term Fees for {current_term} {current_year} (UGX)",
+                                value=int(default_fees),
+                                step=50000,
+                                key=f"fees_{pupil['id']}",
+                                disabled=(new_type == "Shepherd Child"),
+                                help="This will update the fee for the CURRENT term only. Past terms remain unchanged."
+                            )
 
                             col_edit, col_archive = st.columns(2)
                             with col_edit:
-                                if st.form_submit_button("💾 Save Changes", use_container_width=True):
+                                if st.form_submit_button("💾 Save Changes (Current Term Only)",
+                                                         use_container_width=True):
+                                    # Update pupil's default info
                                     manager.update_pupil(pupil['id'], new_name, new_class, new_fees, new_type)
-                                    st.success("Updated!")
+
+                                    # Also explicitly update the CURRENT term enrollment fee
+                                    if current_term_enrollment:
+                                        supabase.table("term_enrollments").update({
+                                            "term_fees": new_fees
+                                        }).eq("pupil_id", pupil_id).eq("term", current_term).eq("year",
+                                                                                                current_year).execute()
+                                    else:
+                                        # If no enrollment exists for current term, create one
+                                        supabase.table("term_enrollments").insert({
+                                            "pupil_id": pupil_id,
+                                            "term": current_term,
+                                            "year": current_year,
+                                            "term_fees": new_fees,
+                                            "is_active": True,
+                                            "enrolled_at": datetime.datetime.now().isoformat()
+                                        }).execute()
+
+                                    st.success(f"✅ Updated {pupil['name']} for {current_term} {current_year}!")
+                                    cache.invalidate(data_type="pupils")
+                                    cache.invalidate(data_type="enrollments")
+                                    cache.invalidate(data_type="ledger")
+                                    time.sleep(1)
                                     st.rerun()
+
                             with col_archive:
                                 leaving_reason = st.text_area("Archive Reason", placeholder="Reason for leaving",
                                                               key=f"leaving_{pupil['id']}")
