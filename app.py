@@ -2053,8 +2053,8 @@ def main_app():
 
                                 col1, col2 = st.columns(2)
                                 with col1:
-                                    amount = st.number_input("Amount to Pay (UGX)", min_value=1000,
-                                                             value=min(overall_balance, 100000), step=50000,
+                                    amount = st.number_input("Amount to Pay (UGX)", min_value=0,
+                                                             value=int(min(overall_balance, 0)), step=10000,
                                                              key="pay_amount_fixed")
                                 with col2:
                                     desc = st.text_input("Description", "Fees Payment", key="pay_desc_fixed")
