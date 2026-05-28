@@ -1681,7 +1681,7 @@ def main_app():
             pupil_class = st.selectbox("Class *", manager.classes, key="enroll_class")
             pupil_type = st.selectbox("Pupil Type *", manager.pupil_types, key="enroll_type")
         with col2:
-            term_fees = st.number_input("Fees Per Term (UGX)", min_value=0, step=0, value=500000, key="enroll_fees",
+            term_fees = st.number_input("Fees Per Term (UGX)", min_value=0, step=0, value=0, key="enroll_fees",
                                         disabled=(pupil_type == "Shepherd Child"))
             if pupil_type == "Shepherd Child":
                 st.info("🙏 Shepherd Child - No fees required")
